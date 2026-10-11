@@ -47,7 +47,7 @@ export default function Pessoas() {
 
   // Form convite
   const [emailConvite, setEmailConvite] = useState('')
-  const [papelConvite, setPapelConvite] = useState<'editor' | 'viewer'>('editor')
+  const [papelConvite, setPapelConvite] = useState<'owner' | 'editor' | 'viewer'>('editor')
   const [restringirEmail, setRestringirEmail] = useState(false)
   const [enviandoConvite, setEnviandoConvite] = useState(false)
   const [conviteGeradoLink, setConviteGeradoLink] = useState<string | null>(null)
@@ -57,7 +57,7 @@ export default function Pessoas() {
 
   // Determinar se o usuário atual é owner
   const isOwner = React.useMemo(() => {
-    if (!user || !membros.length) return true // fallback seguro
+    if (!user || !membros.length) return false // o servidor recusa de qualquer forma
     const meuMembro = membros.find((m) => m.usuario === user.id)
     return meuMembro?.papel === 'owner' || meuMembro?.papel === 'admin'
   }, [user, membros])
@@ -192,7 +192,7 @@ export default function Pessoas() {
               </Label>
               <Select
                 value={papelConvite}
-                onValueChange={(v: 'editor' | 'viewer') => setPapelConvite(v)}
+                onValueChange={(v: 'owner' | 'editor' | 'viewer') => setPapelConvite(v)}
               >
                 <SelectTrigger className="h-11 rounded-2xl mt-1 text-sm">
                   <SelectValue placeholder="Selecione o papel" />
@@ -202,6 +202,9 @@ export default function Pessoas() {
                     Editor (avós, doula, babá — pode registrar e editar)
                   </SelectItem>
                   <SelectItem value="viewer">Visualizador (apenas leitura)</SelectItem>
+                  <SelectItem value="owner">
+                    Pai ou mãe (owner — tudo, inclusive convidar e remover pessoas)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

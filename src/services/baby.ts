@@ -9,6 +9,9 @@ import {
   setCachedData,
   getCachedData,
 } from '@/lib/offline/db'
+import { ehFalhaTransitoria, ehRegistroDuplicado, novoIdLocal } from '@/lib/offline/id'
+
+export type Papel = 'owner' | 'editor' | 'viewer'
 
 export interface EspacoRecord {
   id: string
@@ -86,68 +89,57 @@ export interface AuditoriaRecord {
 }
 
 /**
- * Busca o espaço do bebê do usuário atual
+ * Busca o bebê do usuário atual (o vínculo mais recente em membros).
  */
 export async function obterEspacoAtual(): Promise<EspacoRecord | null> {
   const user = pb.authStore.record
   if (!user) return null
 
   try {
-    // 1. Tentar carregar membro do usuário (buscando espaco_rel não-vazio primeiro)
     const membros = await pb.collection('membros').getFullList<MembroRecord>({
-      filter: `usuario = "${user.id}"`,
+      filter: pb.filter('usuario = {:u} && espaco_rel != ""', { u: user.id }),
       sort: '-created',
     })
-
     for (const m of membros) {
-      const targetId = m.espaco_rel || m.espaco
-      if (targetId) {
-        try {
-          const espaco = await pb.collection('espacos').getOne<EspacoRecord>(targetId)
-          if (espaco) {
-            await setCachedData('espaco_atual', espaco)
-            return espaco
-          }
-        } catch {
-          // Continua tentando outros membros se houver
-        }
-      }
-    }
-
-    // 2. Se não encontrou por membro, buscar espaco onde usuário seja o criador
-    try {
-      const espacosCriador = await pb.collection('espacos').getList<EspacoRecord>(1, 1, {
-        filter: `criador = "${user.id}"`,
-        sort: '-created',
-      })
-      if (espacosCriador.items.length > 0) {
-        const espaco = espacosCriador.items[0]
+      try {
+        const espaco = await pb.collection('espacos').getOne<EspacoRecord>(m.espaco_rel!)
         await setCachedData('espaco_atual', espaco)
+        await setCachedData(`papel_${espaco.id}`, normalizarPapel(m.papel))
         return espaco
+      } catch {
+        // vínculo órfão: tenta o próximo
       }
-    } catch {
-      // Ignora erro de filtro
     }
-
-    // 3. Fallback: listar primeiro espaço acessível ao usuário
-    try {
-      const espacos = await pb.collection('espacos').getList<EspacoRecord>(1, 1, {
-        sort: '-created',
-      })
-      if (espacos.items.length > 0) {
-        const espaco = espacos.items[0]
-        await setCachedData('espaco_atual', espaco)
-        return espaco
-      }
-    } catch {
-      // Ignora
-    }
-
-    // Fallback para cache offline
-    return await getCachedData<EspacoRecord>('espaco_atual')
+    return null
   } catch (err) {
     console.warn('Erro ao obter espaço online, usando cache:', err)
     return await getCachedData<EspacoRecord>('espaco_atual')
+  }
+}
+
+function normalizarPapel(papel: MembroRecord['papel']): Papel {
+  if (papel === 'admin') return 'owner'
+  if (papel === 'membro') return 'editor'
+  return papel
+}
+
+/**
+ * Papel do usuário atual no bebê (para esconder ações que o servidor recusaria).
+ */
+export async function obterMeuPapel(espacoId: string): Promise<Papel> {
+  const user = pb.authStore.record
+  if (!user) return 'viewer'
+  try {
+    const m = await pb
+      .collection('membros')
+      .getFirstListItem<MembroRecord>(
+        pb.filter('usuario = {:u} && espaco_rel = {:e}', { u: user.id, e: espacoId }),
+      )
+    const papel = normalizarPapel(m.papel)
+    await setCachedData(`papel_${espacoId}`, papel)
+    return papel
+  } catch {
+    return (await getCachedData<Papel>(`papel_${espacoId}`)) || 'viewer'
   }
 }
 
@@ -169,13 +161,12 @@ export async function atualizarEspaco(
 export async function listarMembros(espacoId: string): Promise<MembroRecord[]> {
   try {
     const list = await pb.collection('membros').getFullList<MembroRecord>({
+      filter: pb.filter('espaco_rel = {:e}', { e: espacoId }),
       sort: 'created',
       expand: 'usuario',
     })
-    // Filtra membros relacionados ao espaço ou geral
-    const filtrados = list.filter((m) => !m.espaco_rel || m.espaco_rel === espacoId)
-    await setCachedData(`membros_${espacoId}`, filtrados)
-    return filtrados
+    await setCachedData(`membros_${espacoId}`, list)
+    return list
   } catch (err) {
     const cached = await getCachedData<MembroRecord[]>(`membros_${espacoId}`)
     return cached || []
@@ -187,66 +178,42 @@ export async function listarMembros(espacoId: string): Promise<MembroRecord[]> {
  */
 export async function listarConvites(espacoId: string): Promise<ConviteRecord[]> {
   try {
-    const list = await pb.collection('convites').getFullList<ConviteRecord>({
-      filter: `usada_em = null || usada_em = ""`,
+    return await pb.collection('convites').getFullList<ConviteRecord>({
+      filter: pb.filter('espaco_rel = {:e} && usada_em = ""', { e: espacoId }),
       sort: '-created',
       expand: 'criador',
     })
-    return list.filter((c) => !c.espaco_rel || c.espaco_rel === espacoId)
   } catch {
     return []
   }
 }
 
 /**
- * Cria novo convite
+ * Cria novo convite (o token e a validade de até 7 dias são definidos pelo servidor)
  */
 export async function criarConvite(params: {
   espacoId: string
   email?: string
-  papel: 'editor' | 'viewer'
+  papel: Papel
   validadeDias?: number
 }): Promise<ConviteRecord> {
   const user = pb.authStore.record
   if (!user) throw new Error('Não autenticado')
 
-  // Gerar token aleatório seguro
-  const token =
-    Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10)
-  const dias = params.validadeDias || 7
-  const expiraEm = new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString()
-
-  // Buscar space padrão para atender campo legac
-  let defaultSpaceId: string | undefined
-  try {
-    const spaces = await pb.collection('spaces').getList(1, 1)
-    if (spaces.items.length > 0) defaultSpaceId = spaces.items[0].id
-  } catch {
-    /* intentionally ignored */
-  }
-
-  const data: Record<string, unknown> = {
-    espaco: defaultSpaceId,
+  const dias = Math.min(params.validadeDias || 7, 7)
+  const record = await pb.collection('convites').create<ConviteRecord>({
     espaco_rel: params.espacoId,
     email: params.email ? params.email.trim().toLowerCase() : '',
-    token,
     papel: params.papel,
     criador: user.id,
-    expira_em: expiraEm,
-  }
+    expira_em: new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString(),
+  })
 
-  const record = await pb.collection('convites').create<ConviteRecord>(data)
-
-  // Registrar auditoria
-  try {
-    await registrarAuditoria({
-      espacoId: params.espacoId,
-      acao: 'convite_criado',
-      detalhe: `Convite criado para ${params.email || 'link aberto'} com papel ${params.papel}`,
-    })
-  } catch {
-    /* intentionally ignored */
-  }
+  await registrarAuditoria({
+    espacoId: params.espacoId,
+    acao: 'convite_criado',
+    detalhe: `Convite criado para ${params.email || 'link aberto'} com papel ${params.papel}`,
+  })
 
   return record
 }
@@ -272,19 +239,11 @@ export async function revogarConvite(conviteId: string, espacoId: string): Promi
  */
 export async function removerMembro(
   membroId: string,
-  espacoId: string,
-  nomeMembro?: string,
+  _espacoId?: string,
+  _nomeMembro?: string,
 ): Promise<void> {
+  // A auditoria da remoção é registrada pelo servidor (hook em membros).
   await pb.collection('membros').delete(membroId)
-  try {
-    await registrarAuditoria({
-      espacoId,
-      acao: 'membro_removido',
-      detalhe: `Membro ${nomeMembro || membroId} removido da família`,
-    })
-  } catch {
-    /* intentionally ignored */
-  }
 }
 
 /**
@@ -310,25 +269,48 @@ export async function aceitarConvite(
 }
 
 /**
- * Carrega histórico de eventos (mamadas, fraldas) do espaço
+ * Carrega histórico de eventos (mamadas, fraldas) do espaço,
+ * incluindo o que foi registrado neste aparelho e ainda não sincronizou.
  */
 export async function listarEventos(espacoId: string): Promise<EventoRecord[]> {
+  let lista: EventoRecord[]
   try {
-    const list = await pb.collection('eventos').getFullList<EventoRecord>({
-      filter: `espaco = "${espacoId}" && (deleted_at = null || deleted_at = "")`,
+    lista = await pb.collection('eventos').getFullList<EventoRecord>({
+      filter: pb.filter('espaco = {:e} && deleted_at = ""', { e: espacoId }),
       sort: '-inicio_em',
     })
-    await setCachedData(`eventos_${espacoId}`, list)
-    return list
+    await setCachedData(`eventos_${espacoId}`, lista)
   } catch (err) {
     console.warn('Erro ao listar eventos online, usando cache:', err)
-    const cached = await getCachedData<EventoRecord[]>(`eventos_${espacoId}`)
-    return cached || []
+    lista = (await getCachedData<EventoRecord[]>(`eventos_${espacoId}`)) || []
   }
+
+  const pendentes = await getPendingMutations()
+  const ids = new Set(lista.map((e) => e.id))
+  for (const item of pendentes) {
+    if (item.collection !== 'eventos' || item.action !== 'create') continue
+    const dados = item.data as unknown as EventoRecord
+    if (dados.espaco !== espacoId || ids.has(dados.id)) continue
+    lista.push({ ...dados, _pendingOffline: true })
+  }
+  return lista.sort((a, b) => b.inicio_em.localeCompare(a.inicio_em))
+}
+
+function erroAmigavel(err: unknown, padrao: string): Error {
+  const status = (err as { status?: number })?.status || 0
+  if (status === 401) {
+    pb.authStore.clear()
+    return new Error('Sessão expirada, entre novamente')
+  }
+  if (status === 403 || status === 404) {
+    return new Error('Você não tem permissão para esta ação')
+  }
+  return new Error(padrao)
 }
 
 /**
- * Cria evento (mamada, xixi, cocô) com suporte offline e UUID no cliente
+ * Cria evento (mamada, xixi, cocô) com id gerado no aparelho.
+ * Sem conexão, vai para a fila e sincroniza depois; reenvios nunca duplicam.
  */
 export async function criarEvento(params: {
   espacoId: string
@@ -342,173 +324,85 @@ export async function criarEvento(params: {
     throw new Error('Sessão expirada, entre novamente')
   }
 
-  const criadorId = user.id
-  const criadorNome = (user.name as string) || (user.email as string) || 'Família'
-
-  const dados: Record<string, unknown> = {
+  const agora = new Date().toISOString()
+  const dados = {
+    id: novoIdLocal(),
     espaco: params.espacoId,
     tipo: params.tipo,
     inicio_em: params.inicio_em,
-    lado: params.lado || null,
+    lado: (params.lado || '') as EventoRecord['lado'],
     observacao: params.observacao || '',
-    criador: criadorId,
-    criador_nome: criadorNome,
-    deleted_at: null,
+    criador: user.id,
+    criador_nome: (user.name as string) || (user.email as string) || 'Família',
+    deleted_at: '',
   }
 
-  if (!navigator.onLine) {
-    // Modo offline legítimo: gerar ID local para o cliente
-    const clientId =
-      'c_' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 8)
-    const dadosOffline = { ...dados, id: clientId }
-
-    const eventoLocal: EventoRecord = {
-      id: clientId,
-      collectionId: 'pbc_4201693797',
-      collectionName: 'eventos',
-      espaco: params.espacoId,
-      tipo: params.tipo,
-      inicio_em: params.inicio_em,
-      lado: params.lado || null,
-      observacao: params.observacao || '',
-      criador: criadorId,
-      criador_nome: criadorNome,
-      deleted_at: null,
-      created: new Date().toISOString(),
-      updated: new Date().toISOString(),
-      _pendingOffline: true,
-    }
-
+  const salvarNaFila = async (): Promise<EventoRecord> => {
     await enqueueMutation({
-      id: clientId,
+      id: `eventos:${dados.id}:create`,
+      recordId: dados.id,
       collection: 'eventos',
       action: 'create',
-      data: dadosOffline,
+      data: dados,
       createdAt: Date.now(),
       attempts: 0,
     })
-    return eventoLocal
+    return {
+      ...dados,
+      collectionId: '',
+      collectionName: 'eventos',
+      created: agora,
+      updated: agora,
+      _pendingOffline: true,
+    }
   }
+
+  if (!navigator.onLine) return salvarNaFila()
 
   try {
-    // Quando online, cria no PocketBase sem forçar id fixo (deixa PB gerar ou aceitar)
-    const record = await pb.collection('eventos').create<EventoRecord>(dados)
-    return record
+    return await pb.collection('eventos').create<EventoRecord>(dados)
   } catch (err: unknown) {
-    const anyErr = err as { status?: number; data?: unknown; message?: string }
-    const status = anyErr?.status || 0
+    if (ehFalhaTransitoria(err)) {
+      console.warn('Falha na rede ao criar evento, guardando neste aparelho:', err)
+      return salvarNaFila()
+    }
+    throw erroAmigavel(err, 'Não foi possível salvar este registro')
+  }
+}
 
-    // Se for erro de autenticação ou permissão (401 / 403), não mascara como offline!
-    if (status === 401) {
-      pb.authStore.clear()
-      throw new Error('Sessão expirada, entre novamente')
-    }
-    if (status === 403) {
-      throw new Error('Permissão negada para registrar este evento')
-    }
-    if (status >= 400 && status < 500) {
-      // Erro de validação ou regra do PocketBase (400)
-      const msg = anyErr?.message || 'Dados inválidos ao salvar evento'
-      throw new Error(msg)
-    }
-
-    // Se for falha real de rede ou 5xx enquanto navegando, salva offline
-    console.warn('Falha na rede ao criar evento, enfileirando offline:', err)
-    const clientId =
-      'c_' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 8)
-    const dadosOffline = { ...dados, id: clientId }
-    await enqueueMutation({
-      id: clientId,
+async function atualizarEvento(eventoId: string, dados: Record<string, unknown>): Promise<void> {
+  const enfileirar = () =>
+    enqueueMutation({
+      id: `eventos:${eventoId}:update`,
+      recordId: eventoId,
       collection: 'eventos',
-      action: 'create',
-      data: dadosOffline,
+      action: 'update',
+      data: dados,
       createdAt: Date.now(),
       attempts: 0,
     })
 
-    const eventoLocal: EventoRecord = {
-      id: clientId,
-      collectionId: 'pbc_4201693797',
-      collectionName: 'eventos',
-      espaco: params.espacoId,
-      tipo: params.tipo,
-      inicio_em: params.inicio_em,
-      lado: params.lado || null,
-      observacao: params.observacao || '',
-      criador: criadorId,
-      criador_nome: criadorNome,
-      deleted_at: null,
-      created: new Date().toISOString(),
-      updated: new Date().toISOString(),
-      _pendingOffline: true,
-    }
-    return eventoLocal
+  if (!navigator.onLine) return enfileirar()
+  try {
+    await pb.collection('eventos').update(eventoId, dados)
+  } catch (err) {
+    if (ehFalhaTransitoria(err)) return enfileirar()
+    throw erroAmigavel(err, 'Não foi possível atualizar este registro')
   }
 }
 
 /**
- * Exclusão lógica (soft delete) com suporte a desfazer
+ * Exclusão lógica (soft delete): sincroniza a remoção para todos os aparelhos.
  */
 export async function marcarEventoExcluido(eventoId: string): Promise<void> {
-  const isoNow = new Date().toISOString()
-  if (!navigator.onLine) {
-    await enqueueMutation({
-      id: eventoId,
-      collection: 'eventos',
-      action: 'update',
-      data: { deleted_at: isoNow },
-      createdAt: Date.now(),
-      attempts: 0,
-    })
-    return
-  }
-
-  try {
-    await pb.collection('eventos').update(eventoId, {
-      deleted_at: isoNow,
-    })
-  } catch (err) {
-    await enqueueMutation({
-      id: eventoId,
-      collection: 'eventos',
-      action: 'update',
-      data: { deleted_at: isoNow },
-      createdAt: Date.now(),
-      attempts: 0,
-    })
-  }
+  await atualizarEvento(eventoId, { deleted_at: new Date().toISOString() })
 }
 
 /**
  * Desfazer exclusão lógica
  */
 export async function restaurarEvento(eventoId: string): Promise<void> {
-  if (!navigator.onLine) {
-    await enqueueMutation({
-      id: eventoId,
-      collection: 'eventos',
-      action: 'update',
-      data: { deleted_at: null },
-      createdAt: Date.now(),
-      attempts: 0,
-    })
-    return
-  }
-
-  try {
-    await pb.collection('eventos').update(eventoId, {
-      deleted_at: null,
-    })
-  } catch (err) {
-    await enqueueMutation({
-      id: eventoId,
-      collection: 'eventos',
-      action: 'update',
-      data: { deleted_at: null },
-      createdAt: Date.now(),
-      attempts: 0,
-    })
-  }
+  await atualizarEvento(eventoId, { deleted_at: '' })
 }
 
 /**
@@ -550,40 +444,40 @@ export async function listarAuditoria(espacoId: string): Promise<AuditoriaRecord
 }
 
 /**
- * Processador de fila offline — sincroniza quando a conexão é restaurada
+ * Processador de fila offline — sincroniza quando a conexão é restaurada.
+ * Recusa definitiva do servidor (ex.: sem permissão) descarta o item para não travar a fila.
  */
 export async function processarFilaOffline(): Promise<{ totalProcessados: number; erros: number }> {
   if (!navigator.onLine) return { totalProcessados: 0, erros: 0 }
 
-  const pendentes = await getPendingMutations()
-  if (pendentes.length === 0) return { totalProcessados: 0, erros: 0 }
-
+  const pendentes = (await getPendingMutations()).sort((a, b) => a.createdAt - b.createdAt)
   let totalProcessados = 0
   let erros = 0
 
   for (const item of pendentes) {
+    const recordId = item.recordId || item.id
     try {
       if (item.action === 'create') {
-        // Tenta criar; se já existir (idempotência pelo ID), atualiza ou ignora
         try {
           await pb.collection(item.collection).create(item.data)
-        } catch (err: unknown) {
-          const msg = String(err)
-          // Se já existir, tudo bem
-          if (!msg.includes('unique') && !msg.includes('exists')) {
-            throw err
-          }
+        } catch (err) {
+          if (!ehRegistroDuplicado(err)) throw err // já chegou antes: tudo certo
         }
       } else if (item.action === 'update') {
-        await pb.collection(item.collection).update(item.id, item.data)
+        await pb.collection(item.collection).update(recordId, item.data)
       } else if (item.action === 'delete') {
-        await pb.collection(item.collection).delete(item.id)
+        await pb.collection(item.collection).delete(recordId)
       }
       await dequeueMutation(item.id)
       totalProcessados++
     } catch (err) {
-      console.warn(`Erro ao sincronizar item offline ${item.id}:`, err)
       erros++
+      if (ehFalhaTransitoria(err)) {
+        console.warn(`Sem conexão para sincronizar ${item.id}, tentando depois:`, err)
+        break
+      }
+      console.warn(`Servidor recusou ${item.id}; descartando da fila:`, err)
+      await dequeueMutation(item.id)
     }
   }
 
