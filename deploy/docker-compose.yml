@@ -6,6 +6,10 @@
 # Só o `web` fica exposto no Traefik; o PocketBase é interno.
 # Variáveis: copie deploy/.env.example para deploy/.env e preencha.
 
+# Nome fixo do projeto: sem ele o Compose usa o nome da pasta ("deploy"), o mesmo do
+# CRM, e um projeto substitui os contêineres e o volume do outro.
+name: diario
+
 services:
   pocketbase:
     build:
