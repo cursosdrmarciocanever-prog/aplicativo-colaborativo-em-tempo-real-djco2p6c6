@@ -9,7 +9,7 @@ Todo o texto da interface está em português do Brasil (pt-BR), com tom acolhed
 ## 🚀 Tecnologias e Arquitetura
 
 - **Frontend:** React + TypeScript + Tailwind CSS + shadcn/ui + React Router DOM
-- **Backend:** PocketBase v0.36 (Skip Cloud)
+- **Backend:** PocketBase 0.36, self-hosted na VPS (Docker + Traefik). Veja `deploy/README.md`.
 - **Tempo Real:** SSE (Server-Sent Events) via `useRealtime` assinado nas coleções `eventos`, `membros` e `convites`
 - **Offline-First:** Armazenamento local em IndexedDB com idempotência via ID gerado no cliente e fila de sincronização automática com feedback visual discreto
 - **Fuso Horário:** Datas e horários armazenados estritamente em UTC e convertidos/exibidos em `America/Sao_Paulo` via funções puras
@@ -39,7 +39,7 @@ Todo o texto da interface está em português do Brasil (pt-BR), com tom acolhed
 - Ninguém troca o bebê ou o autor de um registro, nem registra em nome de outra pessoa.
 - Cada pessoa só vê o nome e o e-mail de quem divide um bebê com ela.
 
-> **Configuração necessária no Skip Cloud:** o envio de e-mail (SMTP) precisa estar ativo no PocketBase para os códigos de acesso chegarem.
+> O envio de e-mail (SMTP) é configurado pelo `deploy/.env` e aplicado na subida do servidor (hook `configuracao.js`). Sem ele os códigos de acesso não chegam.
 
 ---
 
@@ -106,7 +106,7 @@ npm test                         # regras puras + permissões contra um PocketBa
 
 ## 📝 Decisões registradas
 
-- **Backend:** mantido o PocketBase do Skip Cloud (o projeto já nasceu nele). As "RLS" da seção 8 são as regras de API das coleções, testadas em `tests/backend/`.
+- **Backend:** PocketBase, agora hospedado na VPS (o projeto nasceu na Skip, que foi abandonada). As "RLS" da seção 8 são as regras de API das coleções, testadas em `tests/backend/`.
 - **Login:** código por e-mail (OTP) em vez de link mágico, porque é o fluxo sem senha nativo do PocketBase e funciona igual no app instalado no celular.
 - **Desfazer (5 s):** a exclusão só é enviada ao servidor depois dos 5 segundos; desfazer antes disso não gera tráfego.
 - **Coleções legadas do template** (`spaces`, `atividades`): fechadas para todos exceto o superusuário.

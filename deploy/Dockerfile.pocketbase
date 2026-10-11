@@ -1,0 +1,30 @@
+# PocketBase self-hosted com as migrations e hooks do repo embarcados.
+# As migrations rodam sozinhas no primeiro `serve` e recriam o schema + seed (Sarah).
+# Os hooks entram como *.pb.js (o PocketBase só carrega esse sufixo).
+
+ARG PB_VERSION=0.36.0
+ARG PB_ARCH=linux_amd64
+
+FROM alpine:3.20 AS build
+ARG PB_VERSION
+ARG PB_ARCH
+RUN apk add --no-cache unzip ca-certificates wget
+WORKDIR /pb
+RUN wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_${PB_ARCH}.zip" -O /tmp/pb.zip \
+  && unzip /tmp/pb.zip -d /pb \
+  && rm /tmp/pb.zip
+
+COPY pocketbase/migrations/ /pb/pb_migrations/
+
+COPY pocketbase/hooks/ /tmp/hooks/
+RUN mkdir -p /pb/pb_hooks \
+  && for f in /tmp/hooks/*.js; do cp "$f" "/pb/pb_hooks/$(basename "${f%.js}").pb.js"; done \
+  && rm -rf /tmp/hooks
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata wget
+ENV TZ=America/Sao_Paulo
+WORKDIR /pb
+COPY --from=build /pb /pb
+EXPOSE 8090
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090"]

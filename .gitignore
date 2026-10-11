@@ -49,3 +49,7 @@ screenshot.png
 # Linux kernel core dumps (e.g. when oxfmt or pnpm crash)
 core.[0-9]*
 .pocketbase/
+
+# Deploy: segredos da VPS nunca vão para o Git
+deploy/.env
+!deploy/.env.example

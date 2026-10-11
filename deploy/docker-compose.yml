@@ -1,0 +1,59 @@
+# Diário da Sarah — deploy na VPS (Docker + Traefik), origem única.
+#
+#   [Traefik :443] --> [web (nginx)] --SPA--> navegador
+#                                    \--proxy /api,/_--> [pocketbase :8090]
+#
+# Só o `web` fica exposto no Traefik; o PocketBase é interno.
+# Variáveis: copie deploy/.env.example para deploy/.env e preencha.
+
+services:
+  pocketbase:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.pocketbase
+      args:
+        PB_VERSION: ${PB_VERSION:-0.36.0}
+        PB_ARCH: ${PB_ARCH:-linux_amd64}
+    restart: unless-stopped
+    volumes:
+      - pb_data:/pb/pb_data # dados (SQLite) e fotos — sobrevivem a rebuild
+    environment:
+      APP_URL: https://${DIARIO_HOST}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Diário da Sarah}
+    networks:
+      - internal
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        VITE_POCKETBASE_URL: https://${DIARIO_HOST}
+    restart: unless-stopped
+    depends_on:
+      - pocketbase
+    networks:
+      - internal
+      - n8n_default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=n8n_default
+      - traefik.http.routers.diario.rule=Host(`${DIARIO_HOST}`)
+      - traefik.http.routers.diario.entrypoints=websecure
+      - traefik.http.routers.diario.tls=true
+      - traefik.http.routers.diario.tls.certresolver=${CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.diario.loadbalancer.server.port=80
+
+volumes:
+  pb_data:
+
+networks:
+  internal:
+  n8n_default:
+    external: true # rede do Traefik/n8n que já existe na VPS
