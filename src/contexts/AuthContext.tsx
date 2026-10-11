@@ -65,10 +65,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .then((res) => {
           setUser(res.record)
         })
-        .catch(() => {
-          // Token inválido/expirado
-          pb.authStore.clear()
-          setUser(null)
+        .catch((err: unknown) => {
+          // Apenas limpa a sessão se o backend responder com 401/403 explícito
+          // Erros transitórios de rede (status 0, timeout) NÃO devem deslogar o usuário em um PWA offline-first
+          const status = (err as { status?: number })?.status || 0
+          if (status === 401 || status === 403) {
+            console.warn('Sessão expirada no servidor PocketBase:', err)
+            pb.authStore.clear()
+            setUser(null)
+          } else {
+            console.warn('Falha transitória no authRefresh (mantendo sessão local):', err)
+            // Mantém usuário atual gravado no authStore para funcionamento offline
+            setUser(pb.authStore.record)
+          }
         })
         .finally(() => {
           setIsLoading(false)

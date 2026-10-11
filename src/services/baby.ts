@@ -93,36 +93,54 @@ export async function obterEspacoAtual(): Promise<EspacoRecord | null> {
   if (!user) return null
 
   try {
-    // 1. Tentar carregar membro do usuário
+    // 1. Tentar carregar membro do usuário (buscando espaco_rel não-vazio primeiro)
     const membros = await pb.collection('membros').getFullList<MembroRecord>({
       filter: `usuario = "${user.id}"`,
       sort: '-created',
     })
 
-    let espacoId: string | null = null
-    if (membros.length > 0) {
-      espacoId = membros[0].espaco_rel || null
-    }
-
-    if (espacoId) {
-      try {
-        const espaco = await pb.collection('espacos').getOne<EspacoRecord>(espacoId)
-        await setCachedData('espaco_atual', espaco)
-        return espaco
-      } catch {
-        /* intentionally ignored */
+    for (const m of membros) {
+      const targetId = m.espaco_rel || m.espaco
+      if (targetId) {
+        try {
+          const espaco = await pb.collection('espacos').getOne<EspacoRecord>(targetId)
+          if (espaco) {
+            await setCachedData('espaco_atual', espaco)
+            return espaco
+          }
+        } catch {
+          // Continua tentando outros membros se houver
+        }
       }
     }
 
-    // 2. Se não encontrou por membro, buscar qualquer espaco onde usuario seja criador ou o primeiro existente
-    const espacos = await pb.collection('espacos').getList<EspacoRecord>(1, 1, {
-      sort: '-created',
-    })
+    // 2. Se não encontrou por membro, buscar espaco onde usuário seja o criador
+    try {
+      const espacosCriador = await pb.collection('espacos').getList<EspacoRecord>(1, 1, {
+        filter: `criador = "${user.id}"`,
+        sort: '-created',
+      })
+      if (espacosCriador.items.length > 0) {
+        const espaco = espacosCriador.items[0]
+        await setCachedData('espaco_atual', espaco)
+        return espaco
+      }
+    } catch {
+      // Ignora erro de filtro
+    }
 
-    if (espacos.items.length > 0) {
-      const espaco = espacos.items[0]
-      await setCachedData('espaco_atual', espaco)
-      return espaco
+    // 3. Fallback: listar primeiro espaço acessível ao usuário
+    try {
+      const espacos = await pb.collection('espacos').getList<EspacoRecord>(1, 1, {
+        sort: '-created',
+      })
+      if (espacos.items.length > 0) {
+        const espaco = espacos.items[0]
+        await setCachedData('espaco_atual', espaco)
+        return espaco
+      }
+    } catch {
+      // Ignora
     }
 
     // Fallback para cache offline
@@ -320,29 +338,14 @@ export async function criarEvento(params: {
   observacao?: string
 }): Promise<EventoRecord> {
   const user = pb.authStore.record
-  const criadorId = user?.id || ''
-  const criadorNome = (user?.name as string) || (user?.email as string) || 'Família'
-
-  // Gerar ID do cliente de 15 caracteres estilo PocketBase (ou UUID)
-  const clientId =
-    'c_' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 8)
-
-  const dados: Record<string, unknown> = {
-    id: clientId,
-    espaco: params.espacoId,
-    tipo: params.tipo,
-    inicio_em: params.inicio_em,
-    lado: params.lado || null,
-    observacao: params.observacao || '',
-    criador: criadorId,
-    criador_nome: criadorNome,
-    deleted_at: null,
+  if (!user || !pb.authStore.isValid) {
+    throw new Error('Sessão expirada, entre novamente')
   }
 
-  const eventoLocal: EventoRecord = {
-    id: clientId,
-    collectionId: 'pbc_4201693797',
-    collectionName: 'eventos',
+  const criadorId = user.id
+  const criadorNome = (user.name as string) || (user.email as string) || 'Família'
+
+  const dados: Record<string, unknown> = {
     espaco: params.espacoId,
     tipo: params.tipo,
     inicio_em: params.inicio_em,
@@ -351,18 +354,36 @@ export async function criarEvento(params: {
     criador: criadorId,
     criador_nome: criadorNome,
     deleted_at: null,
-    created: new Date().toISOString(),
-    updated: new Date().toISOString(),
-    _pendingOffline: !navigator.onLine,
   }
 
   if (!navigator.onLine) {
-    // Enfileira offline
+    // Modo offline legítimo: gerar ID local para o cliente
+    const clientId =
+      'c_' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 8)
+    const dadosOffline = { ...dados, id: clientId }
+
+    const eventoLocal: EventoRecord = {
+      id: clientId,
+      collectionId: 'pbc_4201693797',
+      collectionName: 'eventos',
+      espaco: params.espacoId,
+      tipo: params.tipo,
+      inicio_em: params.inicio_em,
+      lado: params.lado || null,
+      observacao: params.observacao || '',
+      criador: criadorId,
+      criador_nome: criadorNome,
+      deleted_at: null,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      _pendingOffline: true,
+    }
+
     await enqueueMutation({
       id: clientId,
       collection: 'eventos',
       action: 'create',
-      data: dados,
+      data: dadosOffline,
       createdAt: Date.now(),
       attempts: 0,
     })
@@ -370,18 +391,57 @@ export async function criarEvento(params: {
   }
 
   try {
+    // Quando online, cria no PocketBase sem forçar id fixo (deixa PB gerar ou aceitar)
     const record = await pb.collection('eventos').create<EventoRecord>(dados)
     return record
-  } catch (err) {
+  } catch (err: unknown) {
+    const anyErr = err as { status?: number; data?: unknown; message?: string }
+    const status = anyErr?.status || 0
+
+    // Se for erro de autenticação ou permissão (401 / 403), não mascara como offline!
+    if (status === 401) {
+      pb.authStore.clear()
+      throw new Error('Sessão expirada, entre novamente')
+    }
+    if (status === 403) {
+      throw new Error('Permissão negada para registrar este evento')
+    }
+    if (status >= 400 && status < 500) {
+      // Erro de validação ou regra do PocketBase (400)
+      const msg = anyErr?.message || 'Dados inválidos ao salvar evento'
+      throw new Error(msg)
+    }
+
+    // Se for falha real de rede ou 5xx enquanto navegando, salva offline
     console.warn('Falha na rede ao criar evento, enfileirando offline:', err)
+    const clientId =
+      'c_' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 8)
+    const dadosOffline = { ...dados, id: clientId }
     await enqueueMutation({
       id: clientId,
       collection: 'eventos',
       action: 'create',
-      data: dados,
+      data: dadosOffline,
       createdAt: Date.now(),
       attempts: 0,
     })
+
+    const eventoLocal: EventoRecord = {
+      id: clientId,
+      collectionId: 'pbc_4201693797',
+      collectionName: 'eventos',
+      espaco: params.espacoId,
+      tipo: params.tipo,
+      inicio_em: params.inicio_em,
+      lado: params.lado || null,
+      observacao: params.observacao || '',
+      criador: criadorId,
+      criador_nome: criadorNome,
+      deleted_at: null,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      _pendingOffline: true,
+    }
     return eventoLocal
   }
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T03:38:38.575Z",
+  "generatedAt": "2026-10-11T04:10:23.485Z",
   "collections": [
     {
       "name": "users",
@@ -318,11 +318,11 @@
       "name": "espacos",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id",
-        "view": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id",
+        "list": "@request.auth.id != '' && (criador = @request.auth.id || (@collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id) || (@collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id))",
+        "view": "@request.auth.id != '' && (criador = @request.auth.id || (@collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id) || (@collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id))",
         "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'",
-        "delete": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'"
+        "update": "@request.auth.id != '' && (criador = @request.auth.id || ((@collection.membros.espaco_rel ?= id || @collection.membros.espaco ?= id) && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'))",
+        "delete": "@request.auth.id != '' && (criador = @request.auth.id || ((@collection.membros.espaco_rel ?= id || @collection.membros.espaco ?= id) && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'))"
       },
       "fields": [
         {

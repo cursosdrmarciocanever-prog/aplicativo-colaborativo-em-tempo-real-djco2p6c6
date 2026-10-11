@@ -27,6 +27,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
+import { toast } from '@/hooks/use-toast'
 import {
   obterEspacoAtual,
   listarEventos,
@@ -166,7 +167,14 @@ export default function Hoje() {
 
   // Registrar mamada agora ou manual
   const handleRegistrarMamada = async (horarioEspecifico?: string) => {
-    if (!espaco) return
+    if (!espaco) {
+      toast({
+        variant: 'destructive',
+        title: 'Espaço não encontrado',
+        description: 'Carregando dados da família, tente novamente em instantes.',
+      })
+      return
+    }
     setErroHorario(null)
 
     let isoUtc = new Date().toISOString()
@@ -189,12 +197,25 @@ export default function Hoje() {
         lado: ladoSelecionado || null,
       })
 
-      // Atualiza estado local imediatamente
-      setEventos((prev) => [novo, ...prev])
+      // Atualiza estado local imediatamente se não duplicado
+      setEventos((prev) => {
+        if (prev.some((e) => e.id === novo.id)) return prev
+        return [novo, ...prev]
+      })
       setHorarioManual('')
       setLadoSelecionado('')
-    } catch (err) {
-      console.warn('Erro ao salvar mamada:', err)
+
+      toast({
+        title: 'Mamada registrada',
+        description: `Mamada registrada com sucesso${ladoSelecionado ? ` (lado ${ladoSelecionado})` : ''}.`,
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao salvar mamada'
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível salvar',
+        description: msg,
+      })
     } finally {
       setSalvandoMamada(false)
     }
@@ -202,16 +223,35 @@ export default function Hoje() {
 
   // Registrar fralda rápida (+ Xixi ou + Cocô)
   const handleRegistrarFralda = async (tipo: 'xixi' | 'coco') => {
-    if (!espaco) return
+    if (!espaco) {
+      toast({
+        variant: 'destructive',
+        title: 'Espaço não encontrado',
+        description: 'Carregando dados da família, tente novamente em instantes.',
+      })
+      return
+    }
     try {
       const novo = await criarEvento({
         espacoId: espaco.id,
         tipo,
         inicio_em: new Date().toISOString(),
       })
-      setEventos((prev) => [novo, ...prev])
-    } catch (err) {
-      console.warn('Erro ao registrar fralda:', err)
+      setEventos((prev) => {
+        if (prev.some((e) => e.id === novo.id)) return prev
+        return [novo, ...prev]
+      })
+      toast({
+        title: tipo === 'xixi' ? 'Xixi registrado' : 'Cocô registrado',
+        description: `Registro adicionado com sucesso.`,
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao salvar fralda'
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível salvar',
+        description: msg,
+      })
     }
   }
 
