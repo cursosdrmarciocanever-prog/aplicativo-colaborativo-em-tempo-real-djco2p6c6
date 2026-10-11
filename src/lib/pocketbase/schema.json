@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-10-11T07:00:11.740Z",
+  "generatedAt": "2026-10-11T19:56:40.365Z",
   "collections": [
     {
       "name": "users",
       "type": "auth",
       "apiRules": {
-        "list": "id = @request.auth.id",
-        "view": "id = @request.auth.id",
+        "list": "@request.auth.id != '' && (id = @request.auth.id || (@collection.membros:alvo.usuario ?= id && @collection.membros:eu.usuario ?= @request.auth.id && @collection.membros:alvo.espaco_rel ?= @collection.membros:eu.espaco_rel))",
+        "view": "@request.auth.id != '' && (id = @request.auth.id || (@collection.membros:alvo.usuario ?= id && @collection.membros:eu.usuario ?= @request.auth.id && @collection.membros:alvo.espaco_rel ?= @collection.membros:eu.espaco_rel))",
         "create": "",
         "update": "id = @request.auth.id",
         "delete": "id = @request.auth.id"
@@ -29,14 +29,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -48,11 +53,11 @@
       "name": "spaces",
       "type": "base",
       "apiRules": {
-        "list": "",
-        "view": "",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != '' && criador = @request.auth.id",
-        "delete": "@request.auth.id != '' && criador = @request.auth.id"
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
       },
       "fields": [
         {
@@ -73,33 +78,40 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_spaces_criador ON spaces (criador)"]
+      "indexes": [
+        "CREATE INDEX idx_spaces_criador ON spaces (criador)"
+      ]
     },
     {
       "name": "membros",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "list": "@request.auth.id != '' && (usuario = @request.auth.id || @collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id)",
+        "view": "@request.auth.id != '' && (usuario = @request.auth.id || @collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id)",
+        "create": null,
+        "update": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner' && usuario != @request.auth.id && (@request.body.espaco_rel:isset = false || @request.body.espaco_rel = espaco_rel) && (@request.body.usuario:isset = false || @request.body.usuario = usuario) && (@request.body.espaco:isset = false || @request.body.espaco = espaco)",
+        "delete": "@request.auth.id != '' && papel != 'owner' && (usuario = @request.auth.id || (@collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'))"
       },
       "fields": [
         {
           "name": "espaco",
           "type": "relation",
-          "required": true,
+          "required": false,
           "system": false,
           "collectionRef": "spaces"
         },
@@ -115,21 +127,32 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["owner", "editor", "viewer", "admin", "membro"]
+          "selectValues": [
+            "owner",
+            "editor",
+            "viewer",
+            "admin",
+            "membro"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "espaco_rel",
@@ -148,24 +171,24 @@
       "name": "convites",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "list": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'",
+        "view": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'",
+        "create": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner' && criador = @request.auth.id",
+        "update": null,
+        "delete": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco_rel && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'"
       },
       "fields": [
         {
           "name": "espaco",
           "type": "relation",
-          "required": true,
+          "required": false,
           "system": false,
           "collectionRef": "spaces"
         },
         {
           "name": "email",
           "type": "text",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
@@ -192,14 +215,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "espaco_rel",
@@ -213,7 +241,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["owner", "editor", "viewer"]
+          "selectValues": [
+            "owner",
+            "editor",
+            "viewer"
+          ]
         },
         {
           "name": "usada_em",
@@ -231,11 +263,11 @@
       "name": "atividades",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
       },
       "fields": [
         {
@@ -255,21 +287,35 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["tarefa", "evento", "meta", "compras", "ideia"]
+          "selectValues": [
+            "tarefa",
+            "evento",
+            "meta",
+            "compras",
+            "ideia"
+          ]
         },
         {
           "name": "status",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["pendente", "em_andamento", "concluida"]
+          "selectValues": [
+            "pendente",
+            "em_andamento",
+            "concluida"
+          ]
         },
         {
           "name": "prioridade",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["baixa", "media", "alta"]
+          "selectValues": [
+            "baixa",
+            "media",
+            "alta"
+          ]
         },
         {
           "name": "prazo",
@@ -296,14 +342,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -318,11 +369,11 @@
       "name": "espacos",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && (criador = @request.auth.id || (@collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id) || (@collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id))",
-        "view": "@request.auth.id != '' && (criador = @request.auth.id || (@collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id) || (@collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id))",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != '' && (criador = @request.auth.id || ((@collection.membros.espaco_rel ?= id || @collection.membros.espaco ?= id) && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'))",
-        "delete": "@request.auth.id != '' && (criador = @request.auth.id || ((@collection.membros.espaco_rel ?= id || @collection.membros.espaco ?= id) && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'))"
+        "list": "@request.auth.id != '' && @collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id",
+        "view": "@request.auth.id != '' && @collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id",
+        "create": "@request.auth.id != '' && criador = @request.auth.id",
+        "update": "@request.auth.id != '' && @collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner' && (@request.body.criador:isset = false || @request.body.criador = criador)",
+        "delete": "@request.auth.id != '' && @collection.membros.espaco_rel ?= id && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'"
       },
       "fields": [
         {
@@ -373,27 +424,34 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_espacos_criador ON espacos (criador)"]
+      "indexes": [
+        "CREATE INDEX idx_espacos_criador ON espacos (criador)"
+      ]
     },
     {
       "name": "eventos",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "list": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id",
+        "view": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id",
+        "create": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id && (@collection.membros.papel ?= 'owner' || @collection.membros.papel ?= 'editor') && criador = @request.auth.id",
+        "update": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id && (@collection.membros.papel ?= 'owner' || @collection.membros.papel ?= 'editor') && (@request.body.espaco:isset = false || @request.body.espaco = espaco) && (@request.body.criador:isset = false || @request.body.criador = criador) && (criador = @request.auth.id || @request.body.deleted_at:isset = false || @collection.membros.papel ?= 'owner')",
+        "delete": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'"
       },
       "fields": [
         {
@@ -408,7 +466,13 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["mamada", "xixi", "coco", "peso", "nota"]
+          "selectValues": [
+            "mamada",
+            "xixi",
+            "coco",
+            "peso",
+            "nota"
+          ]
         },
         {
           "name": "inicio_em",
@@ -421,7 +485,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["esquerdo", "direito", "ambos"]
+          "selectValues": [
+            "esquerdo",
+            "direito",
+            "ambos"
+          ]
         },
         {
           "name": "observacao",
@@ -453,14 +521,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -474,9 +547,9 @@
       "name": "auditoria",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
+        "list": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'",
+        "view": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'",
+        "create": "@request.auth.id != '' && @collection.membros.espaco_rel ?= espaco && @collection.membros.usuario ?= @request.auth.id && usuario = @request.auth.id",
         "update": null,
         "delete": null
       },
@@ -518,14 +591,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
