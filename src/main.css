@@ -1,0 +1,121 @@
+/* Global styles - Diário da Sarah */
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family:
+      'Nunito Sans',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+
+    /* Paleta Diário da Sarah - Modo Claro */
+    /* Primária #1d6b75 -> HSL: 187 60% 29% */
+    --primary: 187 60% 29%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Fundo #f1f5f6 -> HSL: 192 18% 95% */
+    --background: 192 18% 95%;
+    /* Superfície branca */
+    --card: 0 0% 100%;
+    --card-foreground: 192 33% 15%; /* #1a2e33 */
+    --popover: 0 0% 100%;
+    --popover-foreground: 192 33% 15%;
+
+    --secondary: 188 25% 91%;
+    --secondary-foreground: 187 60% 25%;
+
+    --muted: 190 15% 92%;
+    --muted-foreground: 193 13% 41%; /* #5b6f75 */
+
+    --accent: 188 28% 93%;
+    --accent-foreground: 187 60% 29%;
+
+    /* Perigo #b3403a -> HSL: 3 51% 46% */
+    --destructive: 3 51% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Alerta #a8560f -> HSL: 28 84% 36% */
+    --warning: 28 84% 36%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Sucesso #2e7d5b -> HSL: 154 46% 34% */
+    --success: 154 46% 34%;
+    --success-foreground: 0 0% 100%;
+
+    /* Borda suave #e2e8ea */
+    --border: 192 16% 90%;
+    --input: 192 16% 85%;
+    --ring: 187 60% 29%;
+
+    --radius: 1.25rem; /* ~20px */
+  }
+
+  .dark {
+    /* Paleta Diário da Sarah - Dark Mode */
+    /* Fundo #0f1a1c -> HSL: 190 30% 8% */
+    --background: 190 30% 8%;
+    --foreground: 190 20% 93%; /* #e8f0f1 */
+
+    /* Superfície #1a2629 -> HSL: 191 22% 13% */
+    --card: 191 22% 13%;
+    --card-foreground: 190 20% 93%;
+    --popover: 191 22% 13%;
+    --popover-foreground: 190 20% 93%;
+
+    --primary: 187 50% 45%;
+    --primary-foreground: 190 30% 8%;
+
+    --secondary: 191 20% 18%;
+    --secondary-foreground: 190 20% 93%;
+
+    --muted: 191 20% 18%;
+    --muted-foreground: 193 14% 67%; /* #9fb2b8 */
+
+    --accent: 191 20% 20%;
+    --accent-foreground: 190 20% 93%;
+
+    --destructive: 3 60% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 191 20% 21%; /* #2a3a3e */
+    --input: 191 20% 25%;
+    --ring: 187 50% 45%;
+  }
+
+  /* Desligar animações para usuários com preferência por movimento reduzido */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Microinteração "pop" ao clicar em registrar mamada ou fralda */
+.tap-pop {
+  transition:
+    transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.12s ease;
+}
+.tap-pop:active {
+  transform: scale(1.04);
+}

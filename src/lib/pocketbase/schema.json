@@ -1,0 +1,537 @@
+{
+  "generatedAt": "2026-10-11T03:38:38.575Z",
+  "collections": [
+    {
+      "name": "users",
+      "type": "auth",
+      "apiRules": {
+        "list": "id = @request.auth.id",
+        "view": "id = @request.auth.id",
+        "create": "",
+        "update": "id = @request.auth.id",
+        "delete": "id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "avatar",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
+        "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+      ]
+    },
+    {
+      "name": "spaces",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && criador = @request.auth.id",
+        "delete": "@request.auth.id != '' && criador = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "criador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_spaces_criador ON spaces (criador)"]
+    },
+    {
+      "name": "membros",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "espaco",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "spaces"
+        },
+        {
+          "name": "usuario",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "papel",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["owner", "editor", "viewer", "admin", "membro"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "espaco_rel",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "espacos"
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_membros_espaco_usuario ON membros (espaco, usuario)",
+        "CREATE INDEX idx_membros_usuario ON membros (usuario)"
+      ]
+    },
+    {
+      "name": "convites",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "espaco",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "spaces"
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "criador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "expira_em",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "espaco_rel",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "espacos"
+        },
+        {
+          "name": "papel",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["owner", "editor", "viewer"]
+        },
+        {
+          "name": "usada_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_convites_email ON convites (email)",
+        "CREATE UNIQUE INDEX idx_convites_token ON convites (token)"
+      ]
+    },
+    {
+      "name": "atividades",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "categoria",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["tarefa", "evento", "meta", "compras", "ideia"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "em_andamento", "concluida"]
+        },
+        {
+          "name": "prioridade",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["baixa", "media", "alta"]
+        },
+        {
+          "name": "prazo",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "espaco",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "spaces"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_atividades_espaco ON atividades (espaco)",
+        "CREATE INDEX idx_atividades_criador ON atividades (criador)",
+        "CREATE INDEX idx_atividades_status ON atividades (status)",
+        "CREATE INDEX idx_atividades_categoria ON atividades (categoria)",
+        "CREATE INDEX idx_atividades_prazo ON atividades (prazo)"
+      ]
+    },
+    {
+      "name": "espacos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id",
+        "view": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'",
+        "delete": "@request.auth.id != '' && @collection.membros.espaco ?= id && @collection.membros.usuario ?= @request.auth.id && @collection.membros.papel ?= 'owner'"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_nascimento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "hora_nascimento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "peso_nascimento_g",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idade_gestacional_semanas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "intervalo_mamada_minutos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_espacos_criador ON espacos (criador)"]
+    },
+    {
+      "name": "eventos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "espaco",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "espacos"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["mamada", "xixi", "coco", "peso", "nota"]
+        },
+        {
+          "name": "inicio_em",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "lado",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["esquerdo", "direito", "ambos"]
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "criador_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_eventos_espaco ON eventos (espaco)",
+        "CREATE INDEX idx_eventos_inicio_em ON eventos (inicio_em)",
+        "CREATE INDEX idx_eventos_tipo ON eventos (tipo)",
+        "CREATE INDEX idx_eventos_criador ON eventos (criador)"
+      ]
+    },
+    {
+      "name": "auditoria",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "espaco",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "espacos"
+        },
+        {
+          "name": "acao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "usuario",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "usuario_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "detalhe",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_auditoria_espaco ON auditoria (espaco)",
+        "CREATE INDEX idx_auditoria_usuario ON auditoria (usuario)"
+      ]
+    }
+  ]
+}
