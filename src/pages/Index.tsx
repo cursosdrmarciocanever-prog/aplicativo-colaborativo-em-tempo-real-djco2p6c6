@@ -1,32 +1,47 @@
 // src/pages/Index.tsx
-// Tela de login sem senha (magic link PocketBase)
+// Login sem senha: código de uso único enviado por e-mail (OTP do PocketBase)
 
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Heart, Mail, ArrowRight, ShieldCheck, CheckCircle2, Lock } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Heart, Mail, ArrowRight, ShieldCheck, KeyRound, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
-import pb from '@/lib/pocketbase/client'
+
+type Etapa = 'email' | 'codigo' | 'nome'
 
 export default function Index() {
-  const { isAuthenticated, loginMagicLink } = useAuth()
+  const { user, isAuthenticated, solicitarCodigo, entrarComCodigo, salvarNome } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const conviteToken = searchParams.get('convite')
 
+  const [etapa, setEtapa] = useState<Etapa>('email')
   const [email, setEmail] = useState('')
+  const [otpId, setOtpId] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [nome, setNome] = useState('')
   const [loading, setLoading] = useState(false)
-  const [enviado, setEnviado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  // Se já autenticado, vai para Hoje
-  React.useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/hoje', { replace: true })
-    }
-  }, [isAuthenticated, navigate])
+  const seguir = React.useCallback(() => {
+    navigate(conviteToken ? `/convite?token=${encodeURIComponent(conviteToken)}` : '/hoje', {
+      replace: true,
+    })
+  }, [conviteToken, navigate])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Já autenticado: pede o nome uma vez (quem é novo) e segue.
+  React.useEffect(() => {
+    if (!isAuthenticated) return
+    if (!user?.name) {
+      setEtapa('nome')
+      return
+    }
+    seguir()
+  }, [isAuthenticated, user?.name, seguir])
+
+  const enviarEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro(null)
 
@@ -38,33 +53,47 @@ export default function Index() {
 
     setLoading(true)
     try {
-      await loginMagicLink(emailLimpo)
-      setEnviado(true)
+      setOtpId(await solicitarCodigo(emailLimpo))
+      setCodigo('')
+      setEtapa('codigo')
     } catch (err: unknown) {
-      console.warn('Erro ao solicitar link:', err)
-      // Mesmo com e-mail novo, podemos orientar ou permitir login direto de demonstração
-      // Se for usuário de demonstração ou mock, permitimos login com Skip@Pass123
-      try {
-        await pb.collection('users').authWithPassword(emailLimpo, 'Skip@Pass123')
-        navigate('/hoje')
-        return
-      } catch (_) {
-        setEnviado(true)
-      }
+      console.warn('Erro ao solicitar código:', err)
+      setErro('Não foi possível enviar o código agora. Tente de novo em instantes.')
     } finally {
       setLoading(false)
     }
   }
 
-  // Login de demonstração rápido para teste imediato
-  const handleDemoLogin = async (demoEmail: string) => {
-    setLoading(true)
+  const enviarCodigo = async (e: React.FormEvent) => {
+    e.preventDefault()
     setErro(null)
+    const limpo = codigo.replace(/\s/g, '')
+    if (!limpo) {
+      setErro('Digite o código que chegou no seu e-mail.')
+      return
+    }
+    setLoading(true)
     try {
-      await pb.collection('users').authWithPassword(demoEmail, 'Skip@Pass123')
-      navigate('/hoje')
-    } catch (err: unknown) {
-      setErro('Não foi possível entrar automaticamente com esta conta.')
+      await entrarComCodigo(otpId, limpo)
+    } catch {
+      setErro('Código incorreto ou expirado. Confira o e-mail ou peça um novo código.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const enviarNome = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!nome.trim()) {
+      setErro('Conte como a família te chama.')
+      return
+    }
+    setLoading(true)
+    try {
+      await salvarNome(nome.trim())
+      seguir()
+    } catch {
+      setErro('Não foi possível salvar seu nome agora.')
     } finally {
       setLoading(false)
     }
@@ -85,30 +114,96 @@ export default function Index() {
 
       {/* Cartão de autenticação sem senha */}
       <div className="w-full bg-card rounded-[24px] p-6 shadow-sm border border-border">
-        {enviado ? (
-          <div className="text-center py-4 space-y-4">
-            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
+        {etapa === 'codigo' ? (
+          <form onSubmit={enviarCodigo} className="space-y-4">
+            <div className="text-center space-y-2">
+              <h2 className="text-xl font-bold text-foreground">Confira seu e-mail</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Enviamos um código de acesso para{' '}
+                <strong className="text-foreground">{email.trim().toLowerCase()}</strong>.
+              </p>
             </div>
-            <h2 className="text-xl font-bold text-foreground">Verifique seu e-mail</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Enviamos um link mágico de acesso para{' '}
-              <strong className="text-foreground">{email}</strong>. Basta clicar nele para entrar
-              diretamente, sem precisar de senha.
-            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="codigo" className="text-sm font-semibold">
+                Código
+              </Label>
+              <div className="relative">
+                <KeyRound className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="codigo"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="000000"
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  className="pl-11 h-12 rounded-2xl bg-background text-lg tracking-[0.3em]"
+                  autoFocus
+                  required
+                />
+              </div>
+              {erro && <p className="text-xs text-destructive font-medium mt-1">{erro}</p>}
+            </div>
             <div className="bg-muted/50 rounded-2xl p-3 text-xs text-muted-foreground">
-              O link é válido por 10 minutos. Se não encontrar, dê uma olhadinha na pasta de spam.
+              O código vale por 10 minutos. Se não encontrar, dê uma olhadinha na pasta de spam.
             </div>
             <Button
-              variant="outline"
-              onClick={() => setEnviado(false)}
-              className="w-full h-12 rounded-xl mt-2 text-sm"
+              type="submit"
+              disabled={loading}
+              className="w-full h-12 rounded-2xl text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 tap-pop"
             >
-              Tentar outro e-mail
+              <span>{loading ? 'Entrando...' : 'Entrar'}</span>
+              <ArrowRight className="w-4 h-4" />
             </Button>
-          </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setErro(null)
+                setEtapa('email')
+              }}
+              className="w-full h-12 rounded-xl text-sm"
+            >
+              Usar outro e-mail ou pedir novo código
+            </Button>
+          </form>
+        ) : etapa === 'nome' ? (
+          <form onSubmit={enviarNome} className="space-y-4">
+            <div className="text-center space-y-2">
+              <h2 className="text-xl font-bold text-foreground">Que bom ter você aqui!</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Como a família te chama? Esse nome aparece em "registrado por".
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="nome" className="text-sm font-semibold">
+                Seu nome
+              </Label>
+              <div className="relative">
+                <User className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="nome"
+                  placeholder="Ex.: Vovó Maria"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  className="pl-11 h-12 rounded-2xl bg-background text-base"
+                  maxLength={60}
+                  autoFocus
+                  required
+                />
+              </div>
+              {erro && <p className="text-xs text-destructive font-medium mt-1">{erro}</p>}
+            </div>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full h-12 rounded-2xl text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 tap-pop"
+            >
+              <span>{loading ? 'Salvando...' : 'Continuar'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </form>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={enviarEmail} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-sm font-semibold">
                 Seu e-mail
@@ -119,7 +214,8 @@ export default function Index() {
                   id="email"
                   type="email"
                   inputMode="email"
-                  placeholder="exemplo@email.com"
+                  autoComplete="email"
+                  placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-11 h-12 rounded-2xl bg-background text-base"
@@ -134,9 +230,12 @@ export default function Index() {
               disabled={loading}
               className="w-full h-12 rounded-2xl text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 tap-pop"
             >
-              <span>{loading ? 'Enviando...' : 'Entrar com link mágico'}</span>
+              <span>{loading ? 'Enviando...' : 'Receber código por e-mail'}</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Sem senha: a cada acesso enviamos um código de 6 números.
+            </p>
 
             {/* Google Sign-in em breve */}
             <div className="pt-2">
@@ -173,33 +272,6 @@ export default function Index() {
             </div>
           </form>
         )}
-
-        {/* Acesso rápido para demonstração da família Sarah */}
-        <div className="mt-6 pt-5 border-t border-border">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 text-center">
-            Acesso Rápido da Família (Demonstração)
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleDemoLogin('edineia@exemplo.com')}
-              className="text-xs h-10 rounded-xl"
-            >
-              Edineia (Mãe · Owner)
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleDemoLogin('marcio@exemplo.com')}
-              className="text-xs h-10 rounded-xl"
-            >
-              Marcio (Pai · Owner)
-            </Button>
-          </div>
-        </div>
 
         {/* Nota de privacidade e segurança */}
         <div className="mt-6 flex items-start gap-2.5 text-xs text-muted-foreground bg-muted/40 p-3.5 rounded-2xl">

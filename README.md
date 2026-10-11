@@ -16,24 +16,37 @@ Todo o texto da interface está em português do Brasil (pt-BR), com tom acolhed
 
 ---
 
-## 🔑 Contas de Demonstração (Seed)
+## 🔑 Acesso e segurança
 
-Para testes imediatos na Fase 1, o banco de dados já possui o bebê Sarah cadastrado e dois usuários administradores (pais):
+**Não existem contas de demonstração nem senhas.** O login é feito por um código de 6 números enviado por e-mail (OTP do PocketBase, válido por 10 minutos). O login por senha está desativado no servidor.
 
-| Nome | E-mail | Senha de Teste | Papel |
-|---|---|---|---|
-| **Edineia** (Mãe) | `edineia@exemplo.com` | `Skip@Pass123` | Owner (Administrador total) |
-| **Marcio** (Pai) | `marcio@exemplo.com` | `Skip@Pass123` | Owner (Administrador total) |
-| **Marcio Canever** (Dev) | `marciocanever@hotmail.com` | `Skip@Pass123` | Owner (Administrador total) |
+- O bebê Sarah já existe no banco. O único owner semeado é `marciocanever@hotmail.com`, que entra pelo código de e-mail.
+- Edineia, Marcio e o restante da família entram por **convite** (tela Pessoas). Os pais recebem o papel "Pai ou mãe (owner)".
+- As antigas contas `edineia@exemplo.com` e `marcio@exemplo.com` (senha publicada) foram desativadas pela migração `0006`: senha aleatória, e-mail movido para `*.seed@diario.invalid` e sem acesso à Sarah.
 
-Na tela inicial (`/`), há botões de **Acesso Rápido** com um clique para entrar diretamente como Edineia ou Marcio, além do fluxo de link mágico.
+### Quem pode o quê (regras do PocketBase, `pocketbase/migrations/0006_*`)
+
+| | owner | editor | viewer | sem convite |
+|---|---|---|---|---|
+| Ver o bebê, os registros e as pessoas | ✅ | ✅ | ✅ | ❌ (nada) |
+| Registrar mamada e fralda | ✅ | ✅ | ❌ | ❌ |
+| Apagar registro (exclusão lógica) | ✅ todos | só os próprios | ❌ | ❌ |
+| Convidar, revogar convites, remover pessoas, ver auditoria | ✅ | ❌ | ❌ | ❌ |
+| Editar dados do bebê | ✅ | ❌ | ❌ | ❌ |
+
+- Ninguém cria vínculo de membro pela API: quem cria um bebê vira owner (hook `espacos.js`) e convites são aceitos no servidor (`POST /backend/v1/convites/aceitar`).
+- O token do convite é gerado no servidor (40 caracteres), vale no máximo 7 dias, é de uso único e pode ficar restrito ao e-mail convidado. Aceitar um convite menor nunca rebaixa quem já é owner.
+- Ninguém troca o bebê ou o autor de um registro, nem registra em nome de outra pessoa.
+- Cada pessoa só vê o nome e o e-mail de quem divide um bebê com ela.
+
+> **Configuração necessária no Skip Cloud:** o envio de e-mail (SMTP) precisa estar ativo no PocketBase para os códigos de acesso chegarem.
 
 ---
 
 ## 📋 Escopo Entregue na Fase 1
 
 1. **Autenticação sem Senha:**
-   - Login por link mágico via e-mail com fluxo nativo do PocketBase (`requestPasswordReset`/verificação).
+   - Login por código de uso único enviado por e-mail (OTP do PocketBase); sem senha.
    - Botão "Entrar com Google" visível com marcação informativa "em breve".
    - Nota de transparência: *"Seus dados são privados. Apenas pessoas convidadas pela família veem as informações do bebê."*
    - Proteção de rotas com redirecionamento para `/` quando não autenticado.
@@ -73,18 +86,30 @@ Na tela inicial (`/`), há botões de **Acesso Rápido** com um clique para entr
 
 ---
 
-## 🧪 Regras de Negócio e Testes Unitários
+## 🧪 Testes
 
-As regras de negócio foram implementadas como funções puras em `src/lib/regras/` e testadas em `src/lib/regras/regras.test.ts`:
-- **Próxima Mamada:** Contada estritamente do início da última mamada ao início da próxima (`inicio_em + intervaloMinutos`), ordenando por `inicio_em`.
-- **Dia de Vida:** Dia do nascimento = Dia 1. Sarah nascida em 09/10/2026 faz do dia 10/10/2026 o Dia 2 de vida.
-- **Tabela de Fraldas por Dia de Vida:**
-  - Dia 1: 1 xixi / mecônio
-  - Dia 2: 2 xixi / mecônio
-  - Dia 3: 3 xixi / em transição
-  - Dia 4: 4 xixi / amareladas
-  - Dia 5+: 6 ou mais xixi / amareladas 3+
-- **Fuso Horário:** Conversões puras entre UTC e `America/Sao_Paulo`.
+```bash
+./scripts/baixar-pocketbase.sh   # uma vez: baixa o PocketBase 0.36 para .pocketbase/
+npm test                         # regras puras + permissões contra um PocketBase real
+```
+
+- `src/lib/regras/regras.test.ts`: próxima mamada (início a início, ordenada por `inicio_em`), horário manual (rejeita futuro), metas de fralda por dia de vida, dia de vida no fuso de Brasília (inclusive 23:30 local), idade amigável, idade corrigida, conversões UTC ⇄ local e resumo para a pediatra.
+- `src/lib/offline/id.test.ts`: ids gerados no aparelho no formato do PocketBase.
+- `tests/backend/permissoes.test.ts`: sobe um PocketBase descartável com as migrações e hooks deste repositório e verifica que estranho não lê nada, viewer não escreve nem forçando a API, editor só apaga o que registrou, convites expirados, usados ou de outro e-mail são recusados, reenvio com o mesmo id não duplica, login por senha desativado etc. Sem o binário, essa suíte é pulada.
+
+## 🔄 Sincronização e modo offline
+
+- Todo registro nasce com id gerado no aparelho (`src/lib/offline/id.ts`). O mesmo id vai em todo reenvio; o servidor recusa o segundo, então nada duplica.
+- Sem conexão (ou com falha de rede/servidor), o registro fica na fila do IndexedDB e aparece na tela marcado como pendente. A fila é enviada ao voltar a rede ou o foco do app.
+- Recusa definitiva do servidor (ex.: sem permissão) descarta o item da fila para ela não travar.
+- Em tempo real (SSE), criação, edição, exclusão lógica e restauração aparecem nos outros aparelhos.
+
+## 📝 Decisões registradas
+
+- **Backend:** mantido o PocketBase do Skip Cloud (o projeto já nasceu nele). As "RLS" da seção 8 são as regras de API das coleções, testadas em `tests/backend/`.
+- **Login:** código por e-mail (OTP) em vez de link mágico, porque é o fluxo sem senha nativo do PocketBase e funciona igual no app instalado no celular.
+- **Desfazer (5 s):** a exclusão só é enviada ao servidor depois dos 5 segundos; desfazer antes disso não gera tráfego.
+- **Coleções legadas do template** (`spaces`, `atividades`): fechadas para todos exceto o superusuário.
 
 ---
 
@@ -96,6 +121,9 @@ npm install
 
 # Iniciar servidor de desenvolvimento
 npm run dev
+
+# Rodar os testes (veja a seção Testes)
+npm test
 
 # Executar lint estático
 npm run lint

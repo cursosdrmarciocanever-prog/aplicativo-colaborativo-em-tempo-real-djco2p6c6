@@ -72,25 +72,7 @@ export default function Onboarding() {
         criador: user.id,
       })
 
-      // 2. Vincular como owner em membros
-      let defaultSpaceId
-      try {
-        const spaces = await pb.collection('spaces').getList(1, 1)
-        if (spaces.items.length > 0) defaultSpaceId = spaces.items[0].id
-      } catch {
-        /* intentionally ignored */
-      }
-
-      try {
-        await pb.collection('membros').create({
-          espaco: defaultSpaceId,
-          espaco_rel: espaco.id,
-          usuario: user.id,
-          papel: 'owner',
-        })
-      } catch {
-        /* intentionally ignored */
-      }
+      // 2. O servidor vincula quem criou como owner (hook em espacos)
 
       // 3. Convidar primeira pessoa se informado
       if (conviteEmail.trim()) {

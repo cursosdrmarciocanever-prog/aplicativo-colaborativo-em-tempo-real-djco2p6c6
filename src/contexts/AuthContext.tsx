@@ -13,10 +13,18 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   syncState: SyncState
-  loginMagicLink: (email: string) => Promise<void>
+  solicitarCodigo: (email: string) => Promise<string>
+  entrarComCodigo: (otpId: string, codigo: string) => Promise<void>
+  salvarNome: (nome: string) => Promise<void>
   logout: () => void
   refreshUser: () => void
   triggerSync: () => Promise<void>
+}
+
+function novaSenhaDescartavel(): string {
+  const bytes = new Uint8Array(24)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -94,10 +102,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [triggerSync])
 
-  const loginMagicLink = async (email: string) => {
+  // Login sem senha: o PocketBase envia um código de uso único (OTP) por e-mail.
+  // Quem ainda não tem conta ganha uma com senha aleatória (o login por senha fica desativado).
+  const solicitarCodigo = async (email: string): Promise<string> => {
     const cleanEmail = email.trim().toLowerCase()
-    // PocketBase email passwordless reset / verificação de email
-    await pb.collection('users').requestPasswordReset(cleanEmail)
+    const senha = novaSenhaDescartavel()
+    try {
+      await pb
+        .collection('users')
+        .create({ email: cleanEmail, password: senha, passwordConfirm: senha })
+    } catch {
+      // Já existe conta para este e-mail: segue para o código.
+    }
+    const { otpId } = await pb.collection('users').requestOTP(cleanEmail)
+    return otpId
+  }
+
+  const entrarComCodigo = async (otpId: string, codigo: string) => {
+    const res = await pb.collection('users').authWithOTP(otpId, codigo)
+    setUser(res.record)
+  }
+
+  const salvarNome = async (nome: string) => {
+    const atual = pb.authStore.record
+    if (!atual) throw new Error('Não autenticado')
+    const atualizado = await pb.collection('users').update(atual.id, { name: nome })
+    pb.authStore.save(pb.authStore.token, atualizado)
+    setUser(atualizado)
   }
 
   const logout = () => {
@@ -116,7 +147,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isLoading,
         syncState,
-        loginMagicLink,
+        solicitarCodigo,
+        entrarComCodigo,
+        salvarNome,
         logout,
         refreshUser,
         triggerSync,

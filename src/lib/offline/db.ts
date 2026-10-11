@@ -2,7 +2,8 @@
 // Armazenamento offline local com IndexedDB nativo (sem dependências externas)
 
 export interface OfflineQueueItem {
-  id: string // UUID gerado no cliente
+  id: string // chave da fila: coleção:registro:ação
+  recordId?: string // id do registro (gerado no aparelho na criação)
   collection: string
   action: 'create' | 'update' | 'delete'
   data: Record<string, unknown>

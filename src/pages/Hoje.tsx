@@ -30,10 +30,11 @@ import { useAuth } from '@/contexts/AuthContext'
 import { toast } from '@/hooks/use-toast'
 import {
   obterEspacoAtual,
+  obterMeuPapel,
   listarEventos,
+  type Papel,
   criarEvento,
   marcarEventoExcluido,
-  restaurarEvento,
   EspacoRecord,
   EventoRecord,
 } from '@/services/baby'
@@ -61,10 +62,14 @@ import { gerarResumoPediatra } from '@/lib/regras/relatorio'
 import { useRealtime } from '@/hooks/use-realtime'
 
 export default function Hoje() {
-  const { user } = useAuth()
+  const { user, triggerSync } = useAuth()
   const [espaco, setEspaco] = useState<EspacoRecord | null>(null)
   const [eventos, setEventos] = useState<EventoRecord[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [papel, setPapel] = useState<Papel>('viewer')
+  const podeRegistrar = papel === 'owner' || papel === 'editor'
+  const podeApagar = (ev: EventoRecord) =>
+    papel === 'owner' || (papel === 'editor' && ev.criador === user?.id)
 
   // Registro de mamada rápida
   const [ladoSelecionado, setLadoSelecionado] = useState<'esquerdo' | 'direito' | 'ambos' | ''>('')
@@ -86,8 +91,9 @@ export default function Hoje() {
       const esp = await obterEspacoAtual()
       setEspaco(esp)
       if (esp) {
-        const evs = await listarEventos(esp.id)
+        const [evs, meuPapel] = await Promise.all([listarEventos(esp.id), obterMeuPapel(esp.id)])
         setEventos(evs)
+        setPapel(meuPapel)
       }
     } finally {
       setCarregando(false)
@@ -96,7 +102,18 @@ export default function Hoje() {
 
   useEffect(() => {
     carregarDados()
-  }, [])
+    // Ao voltar a conexão ou o foco, sincroniza a fila deste aparelho e recarrega.
+    const recarregar = () => {
+      if (document.visibilityState === 'hidden') return
+      triggerSync().finally(carregarDados)
+    }
+    window.addEventListener('online', recarregar)
+    document.addEventListener('visibilitychange', recarregar)
+    return () => {
+      window.removeEventListener('online', recarregar)
+      document.removeEventListener('visibilitychange', recarregar)
+    }
+  }, [triggerSync])
 
   // Tempo real: assinatura SSE de eventos
   useRealtime<EventoRecord>(
@@ -110,11 +127,13 @@ export default function Hoje() {
           return [sub.record, ...prev]
         })
       } else if (sub.action === 'update') {
-        setEventos((prev) =>
-          prev.map((e) => (e.id === sub.record.id ? sub.record : e)).filter((e) => !e.deleted_at),
-        )
+        setEventos((prev) => {
+          const semEle = prev.filter((e) => e.id !== sub.record.id)
+          // exclusão lógica some da tela; restauração (desfazer) volta
+          return sub.record.deleted_at ? semEle : [sub.record, ...semEle]
+        })
       } else if (sub.action === 'delete') {
-        setEventos((prev) => prev.filter((e) => e.id === sub.record.id))
+        setEventos((prev) => prev.filter((e) => e.id !== sub.record.id))
       }
     },
     !!espaco,
@@ -266,12 +285,17 @@ export default function Hoje() {
 
     // Desfazimento por 5s
     undoTimeoutRef.current = setTimeout(async () => {
+      setEventoExcluidoRecente(null)
       try {
         await marcarEventoExcluido(evento.id)
       } catch (err) {
-        console.warn('Erro ao apagar evento:', err)
+        setEventos((prev) => (prev.some((e) => e.id === evento.id) ? prev : [evento, ...prev]))
+        toast({
+          variant: 'destructive',
+          title: 'Não foi possível apagar',
+          description: err instanceof Error ? err.message : 'Tente de novo em instantes.',
+        })
       }
-      setEventoExcluidoRecente(null)
     }, 5000)
   }
 
@@ -282,12 +306,8 @@ export default function Hoje() {
     }
     const eventoRestaurado = eventoExcluidoRecente
     setEventoExcluidoRecente(null)
+    // A exclusão só vai ao servidor depois dos 5 s; desfazer antes disso é só local.
     setEventos((prev) => [eventoRestaurado, ...prev])
-    try {
-      await restaurarEvento(eventoRestaurado.id)
-    } catch {
-      /* intentionally ignored */
-    }
   }
 
   // Copiar resumo para a pediatra
@@ -391,7 +411,7 @@ export default function Hoje() {
         </div>
 
         {/* Sub-linhas informativas */}
-        <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="mt-4 pt-3 border-t border-border/60 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <div>
             {proximaMamadaInfo.ultimaMamada ? (
               <span>
@@ -412,71 +432,73 @@ export default function Hoje() {
       </div>
 
       {/* 2. REGISTRAR MAMADA (SELEÇÃO DE LADO E BOTÃO GRANDE MAMOU AGORA) */}
-      <div className="bg-card rounded-[24px] p-5 shadow-sm border border-border space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-foreground">Registrar mamada</span>
-          <span className="text-xs text-muted-foreground">Lado (opcional)</span>
-        </div>
-
-        {/* Chips de lado: Esquerdo, Direito, Ambos */}
-        <div className="grid grid-cols-3 gap-2">
-          {(['esquerdo', 'direito', 'ambos'] as const).map((lado) => (
-            <button
-              key={lado}
-              type="button"
-              onClick={() => setLadoSelecionado((prev) => (prev === lado ? '' : lado))}
-              className={`h-11 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
-                ladoSelecionado === lado
-                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                  : 'bg-background hover:bg-muted/50 border-border text-foreground'
-              }`}
-            >
-              <span className="capitalize">{lado}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Botão grande primário "Mamou agora" (>= 48px, visível sem rolar) */}
-        <Button
-          type="button"
-          disabled={salvandoMamada}
-          onClick={() => handleRegistrarMamada()}
-          className="w-full h-14 rounded-2xl text-base font-extrabold bg-primary hover:bg-primary/95 text-primary-foreground shadow-sm flex items-center justify-center gap-2 tap-pop"
-        >
-          <Heart className="w-5 h-5 fill-primary-foreground" />
-          <span>{salvandoMamada ? 'Registrando...' : 'Mamou agora'}</span>
-        </Button>
-
-        {/* Horário manual no passado */}
-        <div className="pt-2">
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <Input
-                type="text"
-                placeholder="Horário manual (ex: 10:30)"
-                value={horarioManual}
-                onChange={(e) => {
-                  setHorarioManual(e.target.value)
-                  setErroHorario(null)
-                }}
-                className="h-11 rounded-2xl text-sm"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!horarioManual || salvandoMamada}
-              onClick={() => handleRegistrarMamada(horarioManual)}
-              className="h-11 rounded-2xl text-xs font-bold px-4"
-            >
-              Registrar
-            </Button>
+      {podeRegistrar && (
+        <div className="bg-card rounded-[24px] p-5 shadow-sm border border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-foreground">Registrar mamada</span>
+            <span className="text-xs text-muted-foreground">Lado (opcional)</span>
           </div>
-          {erroHorario && (
-            <p className="text-xs text-destructive font-medium mt-1.5">{erroHorario}</p>
-          )}
+
+          {/* Chips de lado: Esquerdo, Direito, Ambos */}
+          <div className="grid grid-cols-3 gap-2">
+            {(['esquerdo', 'direito', 'ambos'] as const).map((lado) => (
+              <button
+                key={lado}
+                type="button"
+                onClick={() => setLadoSelecionado((prev) => (prev === lado ? '' : lado))}
+                className={`h-11 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                  ladoSelecionado === lado
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                    : 'bg-background hover:bg-muted/50 border-border text-foreground'
+                }`}
+              >
+                <span className="capitalize">{lado}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Botão grande primário "Mamou agora" (>= 48px, visível sem rolar) */}
+          <Button
+            type="button"
+            disabled={salvandoMamada}
+            onClick={() => handleRegistrarMamada()}
+            className="w-full h-14 rounded-2xl text-base font-extrabold bg-primary hover:bg-primary/95 text-primary-foreground shadow-sm flex items-center justify-center gap-2 tap-pop"
+          >
+            <Heart className="w-5 h-5 fill-primary-foreground" />
+            <span>{salvandoMamada ? 'Registrando...' : 'Mamou agora'}</span>
+          </Button>
+
+          {/* Horário manual no passado */}
+          <div className="pt-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  placeholder="Horário manual (ex: 10:30)"
+                  value={horarioManual}
+                  onChange={(e) => {
+                    setHorarioManual(e.target.value)
+                    setErroHorario(null)
+                  }}
+                  className="h-11 rounded-2xl text-sm"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!horarioManual || salvandoMamada}
+                onClick={() => handleRegistrarMamada(horarioManual)}
+                className="h-11 rounded-2xl text-xs font-bold px-4"
+              >
+                Registrar
+              </Button>
+            </div>
+            {erroHorario && (
+              <p className="text-xs text-destructive font-medium mt-1.5">{erroHorario}</p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 3. FRALDAS DO DIA COM METAS POR DIA DE VIDA */}
       <div className="bg-card rounded-[24px] p-5 shadow-sm border border-border space-y-4">
@@ -504,15 +526,17 @@ export default function Hoje() {
               <span className="text-xs font-bold text-muted-foreground">Xixi</span>
               <span className="text-2xl font-black text-foreground">{xixisHoje.length}</span>
             </div>
-            <div className="mt-3">
-              <Button
-                type="button"
-                onClick={() => handleRegistrarFralda('xixi')}
-                className="w-full h-12 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border/50 tap-pop"
-              >
-                + Xixi
-              </Button>
-            </div>
+            {podeRegistrar && (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  onClick={() => handleRegistrarFralda('xixi')}
+                  className="w-full h-12 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border/50 tap-pop"
+                >
+                  + Xixi
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Card Cocô */}
@@ -521,15 +545,17 @@ export default function Hoje() {
               <span className="text-xs font-bold text-muted-foreground">Cocô</span>
               <span className="text-2xl font-black text-foreground">{cocosHoje.length}</span>
             </div>
-            <div className="mt-3">
-              <Button
-                type="button"
-                onClick={() => handleRegistrarFralda('coco')}
-                className="w-full h-12 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border/50 tap-pop"
-              >
-                + Cocô
-              </Button>
-            </div>
+            {podeRegistrar && (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  onClick={() => handleRegistrarFralda('coco')}
+                  className="w-full h-12 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border/50 tap-pop"
+                >
+                  + Cocô
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -666,14 +692,16 @@ export default function Hoje() {
                       </div>
 
                       {/* Botão apagar */}
-                      <button
-                        onClick={() => handleApagarEvento(ev)}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        aria-label="Apagar registro"
-                        title="Apagar este registro"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {podeApagar(ev) && (
+                        <button
+                          onClick={() => handleApagarEvento(ev)}
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          aria-label="Apagar registro"
+                          title="Apagar este registro"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   )
                 })}
