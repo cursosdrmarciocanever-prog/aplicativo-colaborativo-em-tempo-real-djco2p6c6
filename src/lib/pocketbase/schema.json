@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T04:10:23.485Z",
+  "generatedAt": "2026-10-11T07:00:11.740Z",
   "collections": [
     {
       "name": "users",
@@ -29,14 +29,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -73,17 +78,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_spaces_criador ON spaces (criador)"]
+      "indexes": [
+        "CREATE INDEX idx_spaces_criador ON spaces (criador)"
+      ]
     },
     {
       "name": "membros",
@@ -115,21 +127,32 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["owner", "editor", "viewer", "admin", "membro"]
+          "selectValues": [
+            "owner",
+            "editor",
+            "viewer",
+            "admin",
+            "membro"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "espaco_rel",
@@ -192,14 +215,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "espaco_rel",
@@ -213,7 +241,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["owner", "editor", "viewer"]
+          "selectValues": [
+            "owner",
+            "editor",
+            "viewer"
+          ]
         },
         {
           "name": "usada_em",
@@ -255,21 +287,35 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["tarefa", "evento", "meta", "compras", "ideia"]
+          "selectValues": [
+            "tarefa",
+            "evento",
+            "meta",
+            "compras",
+            "ideia"
+          ]
         },
         {
           "name": "status",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["pendente", "em_andamento", "concluida"]
+          "selectValues": [
+            "pendente",
+            "em_andamento",
+            "concluida"
+          ]
         },
         {
           "name": "prioridade",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["baixa", "media", "alta"]
+          "selectValues": [
+            "baixa",
+            "media",
+            "alta"
+          ]
         },
         {
           "name": "prazo",
@@ -296,14 +342,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -373,17 +424,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_espacos_criador ON espacos (criador)"]
+      "indexes": [
+        "CREATE INDEX idx_espacos_criador ON espacos (criador)"
+      ]
     },
     {
       "name": "eventos",
@@ -408,7 +466,13 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["mamada", "xixi", "coco", "peso", "nota"]
+          "selectValues": [
+            "mamada",
+            "xixi",
+            "coco",
+            "peso",
+            "nota"
+          ]
         },
         {
           "name": "inicio_em",
@@ -421,7 +485,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["esquerdo", "direito", "ambos"]
+          "selectValues": [
+            "esquerdo",
+            "direito",
+            "ambos"
+          ]
         },
         {
           "name": "observacao",
@@ -453,14 +521,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -518,14 +591,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
