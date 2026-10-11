@@ -17,6 +17,7 @@ import Marcos from './pages/Marcos'
 import Album from './pages/Album'
 import AceitarConvite from './pages/AceitarConvite'
 import VerifyEmail from './pages/VerifyEmail'
+import Emergencia from './pages/Emergencia'
 import NotFound from './pages/NotFound'
 
 const App = () => (
@@ -33,6 +34,7 @@ const App = () => (
             {/* Rotas públicas de autenticação/convite */}
             <Route path="/convite" element={<AceitarConvite />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/emergencia" element={<Emergencia />} />
 
             {/* Rotas protegidas */}
             <Route path="/onboarding" element={<Onboarding />} />
