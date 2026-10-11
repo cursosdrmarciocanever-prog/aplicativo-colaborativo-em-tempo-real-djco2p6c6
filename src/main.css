@@ -17,11 +17,11 @@
 
     /* Paleta Diário da Sarah - Modo Claro */
     /* Primária #1d6b75 -> HSL: 187 60% 29% */
-    --primary: 187 60% 29%;
+    --primary: 333.3 71.4% 50.6%;
     --primary-foreground: 0 0% 100%;
 
     /* Fundo #f1f5f6 -> HSL: 192 18% 95% */
-    --background: 192 18% 95%;
+    --background: 43.6 40.7% 94.7%;
     /* Superfície branca */
     --card: 0 0% 100%;
     --card-foreground: 192 33% 15%; /* #1a2e33 */
@@ -34,7 +34,7 @@
     --muted: 190 15% 92%;
     --muted-foreground: 193 13% 41%; /* #5b6f75 */
 
-    --accent: 188 28% 93%;
+    --accent: 43.6 40.7% 94.7%;
     --accent-foreground: 187 60% 29%;
 
     /* Perigo #b3403a -> HSL: 3 51% 46% */
@@ -50,7 +50,7 @@
     --success-foreground: 0 0% 100%;
 
     /* Borda suave #e2e8ea */
-    --border: 192 16% 90%;
+    --border: 346.8 77.2% 49.8%;
     --input: 192 16% 85%;
     --ring: 187 60% 29%;
 
