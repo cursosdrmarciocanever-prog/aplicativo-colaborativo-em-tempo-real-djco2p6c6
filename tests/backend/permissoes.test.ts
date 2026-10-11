@@ -1,6 +1,7 @@
 // Testes de segurança obrigatórios (seção 8) contra um PocketBase real.
 // Rode ./scripts/baixar-pocketbase.sh uma vez; sem o binário a suíte é pulada.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import PocketBase, { ClientResponseError } from 'pocketbase'
 import { criarUsuario, subirPocketBase, temBinario, type Servidor } from './pocketbase'
 
@@ -314,6 +315,70 @@ describe.skipIf(!temBinario)('permissões no PocketBase', () => {
     it('coleções legadas não são públicas', async () => {
       const anon = new PocketBase(s.url)
       expect(await falha(anon.collection('spaces').getFullList())).toBe(403)
+    })
+  })
+
+  describe('entrada de emergência (sem e-mail)', () => {
+    const hash = (c: string) => createHash('sha256').update(c).digest('hex')
+    const entrar = (email: string, codigo: string) =>
+      new PocketBase(s.url).send('/backend/v1/acesso-emergencia', {
+        method: 'POST',
+        body: { email, codigo },
+      })
+    async function semear(email: string, codigo: string, horas = 72) {
+      await s.admin.collection('acessos_emergencia').create({
+        email,
+        segredo_hash: hash(codigo),
+        expira_em: new Date(Date.now() + horas * 3600 * 1000).toISOString(),
+      })
+    }
+
+    it('a migração guarda só o hash do código, para o owner semeado', async () => {
+      const lista = await s.admin.collection('acessos_emergencia').getFullList()
+      expect(lista).toHaveLength(1)
+      expect(lista[0].email).toBe('marciocanever@hotmail.com')
+      expect(lista[0].segredo_hash).toMatch(/^[0-9a-f]{64}$/)
+    })
+
+    it('ninguém além do superusuário lê os códigos', async () => {
+      expect(await falha(dona.cliente.collection('acessos_emergencia').getFullList())).toBe(403)
+    })
+
+    it('código certo entra como owner, uma única vez, e fica na auditoria', async () => {
+      const codigo = 'codigo-de-teste-aaaaaa-bbbbbb'
+      await semear(dona.email, codigo)
+      const r = await entrar(dona.email, codigo)
+      expect(r.token).toBeTruthy()
+      expect(r.record.id).toBe(dona.id)
+      expect(await falha(entrar(dona.email, codigo))).toBe(400)
+      const audit = await dona.cliente
+        .collection('auditoria')
+        .getFullList({ filter: `acao = "acesso_emergencia"` })
+      expect(audit.length).toBeGreaterThan(0)
+    })
+
+    it('recusa código errado, e-mail diferente, expirado e quem não é owner', async () => {
+      const c1 = 'codigo-de-teste-cccccc-dddddd'
+      await semear(dona.email, c1)
+      expect(await falha(entrar(dona.email, c1 + 'x'))).toBe(400)
+      expect(await falha(entrar(editor.email, c1))).toBe(400)
+
+      const c2 = 'codigo-de-teste-eeeeee-ffffff'
+      await semear(dona.email, c2, -1)
+      expect(await falha(entrar(dona.email, c2))).toBe(400)
+
+      const c3 = 'codigo-de-teste-gggggg-hhhhhh'
+      await semear(editor.email, c3)
+      expect(await falha(entrar(editor.email, c3))).toBe(400)
+    })
+
+    it('para de funcionar quando o envio de e-mail é ligado', async () => {
+      const codigo = 'codigo-de-teste-iiiiii-jjjjjj'
+      await semear(dona.email, codigo)
+      await s.admin.settings.update({
+        smtp: { enabled: true, host: 'smtp.teste.local', port: 587 },
+      })
+      expect(await falha(entrar(dona.email, codigo))).toBe(400)
     })
   })
 })
