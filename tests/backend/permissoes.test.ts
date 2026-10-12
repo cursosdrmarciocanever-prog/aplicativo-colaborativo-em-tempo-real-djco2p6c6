@@ -288,6 +288,96 @@ describe.skipIf(!temBinario)('permissões no PocketBase', () => {
     })
   })
 
+  describe('saúde: vacinas, consultas e dúvidas (migração 0008)', () => {
+    const vacina = (c: PocketBase, extra: Record<string, unknown> = {}) =>
+      c.collection('vacinas').create({
+        espaco: espacoId,
+        dose_id: 'bcg',
+        aplicada_em: '2026-10-09',
+        criador: c.authStore.record!.id,
+        ...extra,
+      })
+
+    it('editor registra vacina; membros veem; estranho não', async () => {
+      const v = await vacina(editor.cliente, { lote: 'AB123', local: 'Maternidade' })
+      const lista = await leitor.cliente.collection('vacinas').getFullList()
+      expect(lista.map((x) => x.id)).toContain(v.id)
+      expect(await estranho.cliente.collection('vacinas').getFullList()).toHaveLength(0)
+    })
+
+    it('a mesma dose não é registrada duas vezes', async () => {
+      expect(await falha(vacina(dona.cliente))).toBe(400)
+    })
+
+    it('data precisa ser AAAA-MM-DD', async () => {
+      expect(await falha(vacina(dona.cliente, { dose_id: 'hepb-0', aplicada_em: '09/10/2026' }))).toBe(400)
+    })
+
+    it('viewer e estranho não escrevem', async () => {
+      expect(await falha(vacina(leitor.cliente, { dose_id: 'hepb-0' }))).toBe(400)
+      expect(await falha(vacina(estranho.cliente, { dose_id: 'hepb-0' }))).toBe(400)
+      expect(
+        await falha(
+          leitor.cliente.collection('consultas').create({
+            espaco: espacoId,
+            data: '2026-10-15',
+            tipo: 'rotina',
+            criador: leitor.id,
+          }),
+        ),
+      ).toBe(400)
+    })
+
+    it('consulta guarda as medidas; editor não apaga a consulta da dona', async () => {
+      const c = await dona.cliente.collection('consultas').create({
+        espaco: espacoId,
+        data: '2026-10-15',
+        tipo: 'rotina',
+        peso_g: 3300,
+        comprimento_cm: 50.5,
+        perimetro_cefalico_cm: 35,
+        criador: dona.id,
+      })
+      const lida = await editor.cliente.collection('consultas').getOne(c.id)
+      expect(lida.comprimento_cm).toBe(50.5)
+      expect(await falha(editor.cliente.collection('consultas').delete(c.id))).toBe(404)
+      await editor.cliente.collection('consultas').update(c.id, { orientacoes: 'Vitamina D' })
+      expect(
+        await falha(editor.cliente.collection('consultas').update(c.id, { criador: editor.id })),
+      ).toBe(404)
+      await dona.cliente.collection('consultas').delete(c.id)
+    })
+
+    it('consulta sem medidas (campos vazios como o app envia)', async () => {
+      const c = await editor.cliente.collection('consultas').create({
+        espaco: espacoId,
+        data: '2026-10-16',
+        tipo: 'urgencia',
+        profissional: '',
+        peso_g: null,
+        comprimento_cm: null,
+        perimetro_cefalico_cm: null,
+        orientacoes: '',
+        proxima_consulta: '',
+        criador: editor.id,
+      })
+      expect(c.peso_g).toBe(0)
+      await editor.cliente.collection('consultas').update(c.id, { proxima_consulta: '2026-11-16' })
+    })
+
+    it('dúvida: editor cria, responde e apaga a própria', async () => {
+      const d = await editor.cliente.collection('duvidas').create({
+        espaco: espacoId,
+        texto: 'Pode dar banho todo dia?',
+        criador: editor.id,
+      })
+      await dona.cliente
+        .collection('duvidas')
+        .update(d.id, { resposta: 'Pode', respondida_em: new Date().toISOString() })
+      await editor.cliente.collection('duvidas').delete(d.id)
+    })
+  })
+
   describe('login', () => {
     it('login por senha está desativado (contas de demonstração inclusive)', async () => {
       const anon = new PocketBase(s.url)
