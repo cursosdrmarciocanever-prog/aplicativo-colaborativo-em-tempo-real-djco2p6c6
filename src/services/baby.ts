@@ -10,8 +10,10 @@ import {
   getCachedData,
 } from '@/lib/offline/db'
 import { ehFalhaTransitoria, ehRegistroDuplicado, novoIdLocal } from '@/lib/offline/id'
+import type { ConteudoMamadeira, CorCoco } from '@/lib/regras/alimentacao'
 
 export type Papel = 'owner' | 'editor' | 'viewer'
+export type TipoEvento = 'mamada' | 'mamadeira' | 'ordenha' | 'xixi' | 'coco' | 'peso' | 'nota'
 
 export interface EspacoRecord {
   id: string
@@ -67,9 +69,13 @@ import type { RecordModel } from 'pocketbase'
 export interface EventoRecord extends RecordModel {
   id: string
   espaco: string
-  tipo: 'mamada' | 'xixi' | 'coco' | 'peso' | 'nota'
+  tipo: TipoEvento
   inicio_em: string // ISO UTC
+  fim_em?: string | null // ISO UTC (mamada com cronômetro)
   lado?: 'esquerdo' | 'direito' | 'ambos' | '' | null
+  ml?: number | null
+  conteudo?: ConteudoMamadeira | '' | null
+  coco_cor?: CorCoco | '' | null
   observacao?: string
   criador: string
   criador_nome?: string
@@ -296,6 +302,17 @@ export async function listarEventos(espacoId: string): Promise<EventoRecord[]> {
   return lista.sort((a, b) => b.inicio_em.localeCompare(a.inicio_em))
 }
 
+/**
+ * Mantém a cópia local dos registros em dia (para abrir sem internet com o que já se viu).
+ * Os pendentes não entram: eles já moram na fila e são somados em listarEventos.
+ */
+export async function guardarEventosNoAparelho(espacoId: string, eventos: EventoRecord[]) {
+  await setCachedData(
+    `eventos_${espacoId}`,
+    eventos.filter((e) => !e._pendingOffline),
+  )
+}
+
 function erroAmigavel(err: unknown, padrao: string): Error {
   const status = (err as { status?: number })?.status || 0
   if (status === 401) {
@@ -314,9 +331,13 @@ function erroAmigavel(err: unknown, padrao: string): Error {
  */
 export async function criarEvento(params: {
   espacoId: string
-  tipo: 'mamada' | 'xixi' | 'coco' | 'peso' | 'nota'
+  tipo: TipoEvento
   inicio_em: string // ISO UTC
+  fim_em?: string | null
   lado?: 'esquerdo' | 'direito' | 'ambos' | '' | null
+  ml?: number | null
+  conteudo?: ConteudoMamadeira | null
+  coco_cor?: CorCoco | null
   observacao?: string
 }): Promise<EventoRecord> {
   const user = pb.authStore.record
@@ -330,7 +351,11 @@ export async function criarEvento(params: {
     espaco: params.espacoId,
     tipo: params.tipo,
     inicio_em: params.inicio_em,
+    fim_em: params.fim_em || '',
     lado: (params.lado || '') as EventoRecord['lado'],
+    ml: params.ml ?? null,
+    conteudo: (params.conteudo || '') as EventoRecord['conteudo'],
+    coco_cor: (params.coco_cor || '') as EventoRecord['coco_cor'],
     observacao: params.observacao || '',
     criador: user.id,
     criador_nome: (user.name as string) || (user.email as string) || 'Família',

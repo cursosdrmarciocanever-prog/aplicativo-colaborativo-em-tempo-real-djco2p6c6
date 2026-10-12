@@ -155,5 +155,34 @@ describe('resumo para a pediatra', () => {
     expect(resumo).toContain('Sarah, nascida em 09/10/2026. Mamadas e fraldas.')
     expect(resumo).toContain('(dia 2 de vida): 1 mamadas, 2 xixi, 1 cocô')
     expect(resumo).toContain('Mamadas: 09:00 E')
+    expect(resumo).not.toContain('Mamadeira')
+  })
+
+  it('inclui duração, mamadeira, ordenha e cor do cocô quando houver', () => {
+    const resumo = gerarResumoPediatra({
+      bebeNome: 'Sarah',
+      dataNascimento: '2026-10-09',
+      diaDeVida: 5,
+      mamadas: [
+        { ...mamada09, fim_em: '2026-10-10T12:20:00.000Z' },
+        { id: 'b', tipo: 'mamadeira', inicio_em: '2026-10-10T15:00:00.000Z', ml: 60 },
+      ],
+      totalXixi: 6,
+      totalCoco: 2,
+      volumes: {
+        mamadeiras: 1,
+        mlMamadeira: 60,
+        mlFormula: 60,
+        mlLeiteMaterno: 0,
+        ordenhas: 1,
+        mlOrdenha: 90,
+      },
+      coresCoco: ['amarelo', 'amarelo', null],
+    })
+    expect(resumo).toContain('1 mamadas')
+    expect(resumo).toContain('09:00 E (20 min)')
+    expect(resumo).toContain('Mamadeira: 1x, 60 mL (fórmula 60 mL)')
+    expect(resumo).toContain('Ordenha: 1x, 90 mL')
+    expect(resumo).toContain('Cor do cocô: 2 amarelo')
   })
 })

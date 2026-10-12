@@ -86,6 +86,16 @@ Todo o texto da interface está em português do Brasil (pt-BR), com tom acolhed
 
 ---
 
+## 🍼 Rotina (Fase 2)
+
+- Mamada com **cronômetro** (início, fim e lado; continua correndo se a página recarregar).
+- **Mamadeira** (leite materno ou fórmula) e **ordenha** em mL. A mamadeira conta para a próxima mamada.
+- **Cor do cocô** opcional, com aviso gentil para cocô claro/esbranquiçado ou com sangue
+  (referência: cartela de cores da Caderneta da Criança). Nunca é diagnóstico.
+- Resumo para a pediatra inclui duração, mamadeira, ordenha e cores.
+- **Instalável no celular (PWA)**: manifest, ícones e service worker; abre sem internet com os
+  últimos dados vistos. iPhone: Safari → Compartilhar → "Adicionar à Tela de Início".
+
 ## 🧪 Testes
 
 ```bash

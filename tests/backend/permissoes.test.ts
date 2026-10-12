@@ -198,6 +198,27 @@ describe.skipIf(!temBinario)('permissões no PocketBase', () => {
       await dona.cliente.collection('eventos').delete(meu.id)
     })
 
+    it('aceita mamadeira, ordenha, cronômetro e cor do cocô (migração 0007)', async () => {
+      const mb = await evento(editor.cliente, espacoId, {
+        tipo: 'mamadeira',
+        ml: 60,
+        conteudo: 'formula',
+      })
+      expect(mb.ml).toBe(60)
+      expect(mb.conteudo).toBe('formula')
+      const ord = await evento(editor.cliente, espacoId, { tipo: 'ordenha', ml: 90 })
+      expect(ord.tipo).toBe('ordenha')
+      const fim = new Date(Date.now() + 15 * 60000).toISOString()
+      const m = await evento(editor.cliente, espacoId, { fim_em: fim, lado: 'direito' })
+      expect(m.fim_em).toBe(fim)
+      const c = await evento(editor.cliente, espacoId, { tipo: 'coco', coco_cor: 'amarelo' })
+      expect(c.coco_cor).toBe('amarelo')
+      expect(await falha(evento(editor.cliente, espacoId, { tipo: 'coco', coco_cor: 'roxo' }))).toBe(
+        400,
+      )
+      expect(await falha(evento(leitor.cliente, espacoId, { tipo: 'mamadeira', ml: 30 }))).toBe(400)
+    })
+
     it('reenvio com o mesmo id gerado no aparelho não duplica', async () => {
       const id = 'abcdefghij12345'
       await evento(editor.cliente, espacoId, { id })

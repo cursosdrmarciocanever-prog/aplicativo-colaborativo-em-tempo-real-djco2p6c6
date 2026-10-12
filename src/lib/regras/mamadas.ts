@@ -3,7 +3,10 @@
 
 export interface MamadaEvento {
   id: string
+  tipo?: 'mamada' | 'mamadeira' // mamadeira também conta para a próxima mamada
   inicio_em: string // ISO UTC
+  fim_em?: string | null
+  ml?: number | null
   lado?: 'esquerdo' | 'direito' | 'ambos' | '' | null
   criador_nome?: string
   deleted_at?: string | null

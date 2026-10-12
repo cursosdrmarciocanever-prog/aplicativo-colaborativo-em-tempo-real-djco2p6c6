@@ -31,6 +31,7 @@ import { toast } from '@/hooks/use-toast'
 import {
   obterEspacoAtual,
   obterMeuPapel,
+  guardarEventosNoAparelho,
   listarEventos,
   type Papel,
   criarEvento,
@@ -59,7 +60,38 @@ import {
   getSaoPauloParts,
 } from '@/lib/regras/fuso'
 import { gerarResumoPediatra } from '@/lib/regras/relatorio'
+import {
+  CORES_COCO,
+  avaliarCorCoco,
+  formatarDuracao,
+  totalizarVolumes,
+  type ConteudoMamadeira,
+  type CorCoco,
+} from '@/lib/regras/alimentacao'
+import CronometroMamada from '@/components/hoje/CronometroMamada'
+import RegistroMamadeira from '@/components/hoje/RegistroMamadeira'
 import { useRealtime } from '@/hooks/use-realtime'
+
+const VISUAL_TIPO: Record<string, { sigla: string; rotulo: string; classe: string }> = {
+  mamada: { sigla: 'M', rotulo: 'Mamada', classe: 'bg-primary/10 text-primary' },
+  mamadeira: { sigla: 'Mb', rotulo: 'Mamadeira', classe: 'bg-primary/10 text-primary' },
+  ordenha: {
+    sigla: 'O',
+    rotulo: 'Ordenha',
+    classe: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300',
+  },
+  xixi: {
+    sigla: 'X',
+    rotulo: 'Xixi',
+    classe: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+  },
+  coco: {
+    sigla: 'C',
+    rotulo: 'Cocô',
+    classe: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
+  },
+  nota: { sigla: 'N', rotulo: 'Nota', classe: 'bg-muted text-muted-foreground' },
+}
 
 export default function Hoje() {
   const { user, triggerSync } = useAuth()
@@ -76,6 +108,7 @@ export default function Hoje() {
   const [horarioManual, setHorarioManual] = useState('')
   const [erroHorario, setErroHorario] = useState<string | null>(null)
   const [salvandoMamada, setSalvandoMamada] = useState(false)
+  const [corCoco, setCorCoco] = useState<CorCoco | ''>('')
 
   // Desfazer exclusão lógica (5 segundos)
   const [eventoExcluidoRecente, setEventoExcluidoRecente] = useState<EventoRecord | null>(null)
@@ -139,6 +172,11 @@ export default function Hoje() {
     !!espaco,
   )
 
+  // Cópia local acompanha cada mudança (registro, exclusão, tempo real)
+  useEffect(() => {
+    if (espaco && !carregando) guardarEventosNoAparelho(espaco.id, eventos)
+  }, [espaco, eventos, carregando])
+
   const dataNascimento = espaco?.data_nascimento || '2026-10-09'
   const diaDeVida = useMemo(() => calcularDiaDeVida(dataNascimento), [dataNascimento])
   const intervaloMamada = espaco?.intervalo_mamada_minutos || 180
@@ -150,10 +188,13 @@ export default function Hoje() {
   // Mamadas
   const mamadasTodas: MamadaEvento[] = useMemo(() => {
     return eventosAtivos
-      .filter((e) => e.tipo === 'mamada')
+      .filter((e) => e.tipo === 'mamada' || e.tipo === 'mamadeira')
       .map((e) => ({
         id: e.id,
+        tipo: e.tipo as 'mamada' | 'mamadeira',
         inicio_em: e.inicio_em,
+        fim_em: e.fim_em,
+        ml: e.ml,
         lado: e.lado,
         criador_nome: e.criador_nome,
         deleted_at: e.deleted_at,
@@ -173,6 +214,20 @@ export default function Hoje() {
   const cocosHoje = useMemo(() => {
     return eventosAtivos.filter((e) => e.tipo === 'coco' && getLocalDayKey(e.inicio_em) === hojeKey)
   }, [eventosAtivos, hojeKey])
+
+  const volumesHoje = useMemo(
+    () => totalizarVolumes(eventosAtivos.filter((e) => getLocalDayKey(e.inicio_em) === hojeKey)),
+    [eventosAtivos, hojeKey],
+  )
+
+  // Aviso informativo se algum cocô de hoje teve cor que pede conversa com a pediatra
+  const avisoCorCocoHoje = useMemo(() => {
+    for (const c of cocosHoje) {
+      const a = avaliarCorCoco(c.coco_cor, diaDeVida)
+      if (a.nivel === 'atencao') return a.mensagem
+    }
+    return null
+  }, [cocosHoje, diaDeVida])
 
   // Próxima mamada cálculo
   const proximaMamadaInfo = useMemo(() => {
@@ -240,6 +295,30 @@ export default function Hoje() {
     }
   }
 
+  // Registro genérico (cronômetro, mamadeira, ordenha). Devolve true se salvou.
+  const registrar = async (
+    dados: Omit<Parameters<typeof criarEvento>[0], 'espacoId'>,
+    titulo: string,
+  ): Promise<boolean> => {
+    if (!espaco) return false
+    setSalvandoMamada(true)
+    try {
+      const novo = await criarEvento({ espacoId: espaco.id, ...dados })
+      setEventos((prev) => (prev.some((e) => e.id === novo.id) ? prev : [novo, ...prev]))
+      toast({ title: titulo })
+      return true
+    } catch (err: unknown) {
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível salvar',
+        description: err instanceof Error ? err.message : 'Tente de novo em instantes.',
+      })
+      return false
+    } finally {
+      setSalvandoMamada(false)
+    }
+  }
+
   // Registrar fralda rápida (+ Xixi ou + Cocô)
   const handleRegistrarFralda = async (tipo: 'xixi' | 'coco') => {
     if (!espaco) {
@@ -251,19 +330,28 @@ export default function Hoje() {
       return
     }
     try {
+      const cor = tipo === 'coco' ? corCoco : ''
       const novo = await criarEvento({
         espacoId: espaco.id,
         tipo,
         inicio_em: new Date().toISOString(),
+        coco_cor: cor || null,
       })
+      setCorCoco('')
+      const aviso = cor ? avaliarCorCoco(cor, diaDeVida) : null
+      if (aviso?.nivel === 'atencao') {
+        toast({ title: 'Cocô registrado', description: aviso.mensagem || undefined })
+      }
       setEventos((prev) => {
         if (prev.some((e) => e.id === novo.id)) return prev
         return [novo, ...prev]
       })
-      toast({
-        title: tipo === 'xixi' ? 'Xixi registrado' : 'Cocô registrado',
-        description: `Registro adicionado com sucesso.`,
-      })
+      if (!(aviso?.nivel === 'atencao')) {
+        toast({
+          title: tipo === 'xixi' ? 'Xixi registrado' : 'Cocô registrado',
+          description: `Registro adicionado com sucesso.`,
+        })
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao salvar fralda'
       toast({
@@ -319,6 +407,8 @@ export default function Hoje() {
       mamadas: mamadasHoje,
       totalXixi: xixisHoje.length,
       totalCoco: cocosHoje.length,
+      volumes: volumesHoje,
+      coresCoco: cocosHoje.map((c) => c.coco_cor),
     })
 
     navigator.clipboard.writeText(texto).then(() => {
@@ -346,6 +436,7 @@ export default function Hoje() {
         const totalMamadas = evs.filter((e) => e.tipo === 'mamada').length
         const totalXixi = evs.filter((e) => e.tipo === 'xixi').length
         const totalCoco = evs.filter((e) => e.tipo === 'coco').length
+        const vol = totalizarVolumes(evs)
 
         const partes = diaKey.split('-')
         const dataFormatada = `${partes[2]}/${partes[1]}`
@@ -354,7 +445,9 @@ export default function Hoje() {
         return {
           diaKey,
           titulo: `${diaSemana}, ${dataFormatada}`,
-          totais: `${totalMamadas} mamadas · ${totalXixi} xixi · ${totalCoco} cocô`,
+          totais:
+            `${totalMamadas} mamadas · ${totalXixi} xixi · ${totalCoco} cocô` +
+            (vol.mamadeiras ? ` · mamadeira ${vol.mlMamadeira} mL` : ''),
           eventos: evs,
         }
       })
@@ -416,9 +509,11 @@ export default function Hoje() {
             {proximaMamadaInfo.ultimaMamada ? (
               <span>
                 Última: <strong>{formatLocalTime(proximaMamadaInfo.ultimaMamada.inicio_em)}</strong>
-                {proximaMamadaInfo.ultimaMamada.lado
-                  ? ` · lado ${proximaMamadaInfo.ultimaMamada.lado}`
-                  : ''}
+                {proximaMamadaInfo.ultimaMamada.tipo === 'mamadeira'
+                  ? ` · mamadeira${proximaMamadaInfo.ultimaMamada.ml ? ` ${proximaMamadaInfo.ultimaMamada.ml} mL` : ''}`
+                  : proximaMamadaInfo.ultimaMamada.lado
+                    ? ` · lado ${proximaMamadaInfo.ultimaMamada.lado}`
+                    : ''}
               </span>
             ) : (
               <span>Ainda sem registro anterior</span>
@@ -497,7 +592,40 @@ export default function Hoje() {
               <p className="text-xs text-destructive font-medium mt-1.5">{erroHorario}</p>
             )}
           </div>
+
+          {espaco && (
+            <CronometroMamada
+              espacoId={espaco.id}
+              ladoInicial={ladoSelecionado}
+              salvando={salvandoMamada}
+              onTerminar={({ inicio, fim, lado }) =>
+                registrar(
+                  { tipo: 'mamada', inicio_em: inicio, fim_em: fim, lado: lado || null },
+                  `Mamada registrada (${formatarDuracao(inicio, fim) || 'menos de 1 min'})`,
+                )
+              }
+            />
+          )}
         </div>
+      )}
+
+      {podeRegistrar && (
+        <RegistroMamadeira
+          salvando={salvandoMamada}
+          onRegistrar={({ tipo, ml, conteudo }) =>
+            registrar(
+              {
+                tipo,
+                inicio_em: new Date().toISOString(),
+                ml,
+                conteudo: conteudo as ConteudoMamadeira | null,
+              },
+              tipo === 'ordenha'
+                ? `Ordenha registrada (${ml} mL)`
+                : `Mamadeira registrada (${ml} mL)`,
+            )
+          }
+        />
       )}
 
       {/* 3. FRALDAS DO DIA COM METAS POR DIA DE VIDA */}
@@ -559,6 +687,44 @@ export default function Hoje() {
           </div>
         </div>
 
+        {podeRegistrar && (
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              Cor do cocô (opcional, antes de tocar em + Cocô)
+            </span>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Cor do cocô">
+              {CORES_COCO.map((c) => (
+                <button
+                  key={c.valor}
+                  type="button"
+                  role="radio"
+                  aria-checked={corCoco === c.valor}
+                  onClick={() => setCorCoco((prev) => (prev === c.valor ? '' : c.valor))}
+                  className={`h-8 pl-1.5 pr-2.5 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 ${
+                    corCoco === c.valor
+                      ? 'border-primary ring-2 ring-primary/30 text-foreground'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  <span
+                    className="w-5 h-5 rounded-full border border-black/10"
+                    style={{ backgroundColor: c.amostra }}
+                    aria-hidden="true"
+                  />
+                  {c.rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {avisoCorCocoHoje && (
+          <div className="flex items-start gap-2 rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{avisoCorCocoHoje}</span>
+          </div>
+        )}
+
         {/* Feedback da meta do dia */}
         <div className="bg-muted/40 rounded-2xl p-3 text-xs flex items-center justify-between">
           <span className="text-muted-foreground">
@@ -609,6 +775,8 @@ export default function Hoje() {
             mamadas: mamadasHoje,
             totalXixi: xixisHoje.length,
             totalCoco: cocosHoje.length,
+            volumes: volumesHoje,
+            coresCoco: cocosHoje.map((c) => c.coco_cor),
           })}
         </div>
       </div>
@@ -630,7 +798,7 @@ export default function Hoje() {
               className="bg-card rounded-[24px] overflow-hidden border border-border shadow-sm"
             >
               {/* Cabeçalho do dia com totais */}
-              <div className="bg-muted/40 px-4 py-3 border-b border-border flex items-center justify-between">
+              <div className="bg-muted/40 px-4 py-3 border-b border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
                 <span className="font-bold text-xs text-foreground capitalize">{grupo.titulo}</span>
                 <span className="text-[11px] font-semibold text-muted-foreground">
                   {grupo.totais}
@@ -640,13 +808,31 @@ export default function Hoje() {
               {/* Lista cronológica do dia */}
               <div className="divide-y divide-border/50">
                 {grupo.eventos.map((ev, index) => {
-                  const evAnterior =
-                    ev.tipo === 'mamada'
-                      ? grupo.eventos.slice(index + 1).find((e) => e.tipo === 'mamada') || null
-                      : null
+                  const ehAlimentacao = ev.tipo === 'mamada' || ev.tipo === 'mamadeira'
+                  const evAnterior = ehAlimentacao
+                    ? grupo.eventos
+                        .slice(index + 1)
+                        .find((e) => e.tipo === 'mamada' || e.tipo === 'mamadeira') || null
+                    : null
+                  const visual = VISUAL_TIPO[ev.tipo] || VISUAL_TIPO.nota
+                  const detalhes = [
+                    ev.lado ? ev.lado : '',
+                    ev.ml ? `${ev.ml} mL` : '',
+                    ev.conteudo === 'formula'
+                      ? 'fórmula'
+                      : ev.conteudo === 'leite_materno'
+                        ? 'leite materno'
+                        : '',
+                    formatarDuracao(ev.inicio_em, ev.fim_em) || '',
+                    ev.coco_cor
+                      ? CORES_COCO.find((c) => c.valor === ev.coco_cor)?.rotulo.toLowerCase() || ''
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
 
                   const tempoDesde =
-                    ev.tipo === 'mamada' && evAnterior
+                    ehAlimentacao && evAnterior
                       ? calcularTempoDesdeAnterior(
                           { id: ev.id, inicio_em: ev.inicio_em },
                           { id: evAnterior.id, inicio_em: evAnterior.inicio_em },
@@ -660,24 +846,19 @@ export default function Hoje() {
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-9 h-9 rounded-2xl flex items-center justify-center font-bold text-xs ${
-                            ev.tipo === 'mamada'
-                              ? 'bg-primary/10 text-primary'
-                              : ev.tipo === 'xixi'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                          }`}
+                          className={`w-9 h-9 rounded-2xl flex items-center justify-center font-bold text-xs ${visual.classe}`}
+                          aria-hidden="true"
                         >
-                          {ev.tipo === 'mamada' ? 'M' : ev.tipo === 'xixi' ? 'X' : 'C'}
+                          {visual.sigla}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-sm text-foreground">
                               {formatLocalTime(ev.inicio_em)}
                             </span>
-                            <span className="text-xs font-semibold capitalize text-foreground">
-                              {ev.tipo}
-                              {ev.lado ? ` (${ev.lado})` : ''}
+                            <span className="text-xs font-semibold text-foreground">
+                              {visual.rotulo}
+                              {detalhes ? ` (${detalhes})` : ''}
                             </span>
                             {tempoDesde && (
                               <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
