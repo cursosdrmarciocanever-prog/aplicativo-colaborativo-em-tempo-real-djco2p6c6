@@ -2,6 +2,10 @@
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './main.css'
+import { iniciarTema } from './lib/tema'
+
+// Aparência (claro, escuro, noturno ou automático) antes de desenhar a tela.
+iniciarTema()
 
 // Os testes das regras rodam com `npm test` (Vitest), não no navegador.
 

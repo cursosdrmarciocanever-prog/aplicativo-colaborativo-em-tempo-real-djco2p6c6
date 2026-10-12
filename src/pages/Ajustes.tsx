@@ -1,11 +1,12 @@
 // src/pages/Ajustes.tsx
-// Tela Ajustes: Editar dados do bebê, tema (claro/escuro/auto), transparência LGPD, auditoria e sair
+// Tela Ajustes: Editar dados do bebê, tema (claro/escuro/noturno/auto), transparência LGPD, auditoria e sair
 
 import React, { useEffect, useState } from 'react'
 import {
   Settings,
   Baby,
   Moon,
+  MoonStar,
   Sun,
   Laptop,
   ShieldCheck,
@@ -36,6 +37,21 @@ import {
   AuditoriaRecord,
 } from '@/services/baby'
 import { formatLocalTime, formatLocalDateShort } from '@/lib/regras/fuso'
+import {
+  lerTema,
+  salvarTema,
+  ouvirTema,
+  NOITE_INICIO_HORA,
+  NOITE_FIM_HORA,
+  type Tema,
+} from '@/lib/tema'
+
+const OPCOES_TEMA: { valor: Tema; rotulo: string; Icone: typeof Sun }[] = [
+  { valor: 'claro', rotulo: 'Claro', Icone: Sun },
+  { valor: 'escuro', rotulo: 'Escuro', Icone: Moon },
+  { valor: 'noturno', rotulo: 'Noturno', Icone: MoonStar },
+  { valor: 'auto', rotulo: 'Automático', Icone: Laptop },
+]
 
 export default function Ajustes() {
   const { user, logout } = useAuth()
@@ -53,8 +69,8 @@ export default function Ajustes() {
   const [salvando, setSalvando] = useState(false)
   const [salvoComSucesso, setSalvoComSucesso] = useState(false)
 
-  // Tema: claro / escuro / automático
-  const [tema, setTema] = useState<'claro' | 'escuro' | 'auto'>('auto')
+  // Tema: claro / escuro / noturno / automático
+  const [tema, setTema] = useState<Tema>(() => lerTema())
 
   useEffect(() => {
     obterEspacoAtual().then((esp) => {
@@ -74,29 +90,14 @@ export default function Ajustes() {
         listarAuditoria(esp.id).then((aud) => setAuditoria(aud))
       }
     })
-
-    // Detectar tema salvo no localStorage
-    const salvo = localStorage.getItem('diario_tema') as 'claro' | 'escuro' | 'auto' | null
-    if (salvo) setTema(salvo)
   }, [])
 
-  const aplicarTema = (novoTema: 'claro' | 'escuro' | 'auto') => {
-    setTema(novoTema)
-    localStorage.setItem('diario_tema', novoTema)
+  // Também acompanha o botão da lua no topo
+  useEffect(() => ouvirTema(setTema), [])
 
-    const root = document.documentElement
-    if (novoTema === 'escuro') {
-      root.classList.add('dark')
-    } else if (novoTema === 'claro') {
-      root.classList.remove('dark')
-    } else {
-      // Automático: respeitar prefers-color-scheme
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        root.classList.add('dark')
-      } else {
-        root.classList.remove('dark')
-      }
-    }
+  const aplicarTema = (novoTema: Tema) => {
+    setTema(novoTema)
+    salvarTema(novoTema)
   }
 
   const handleSalvarDados = async (e: React.FormEvent) => {
@@ -225,46 +226,31 @@ export default function Ajustes() {
       {/* 2. TEMA DE APARÊNCIA */}
       <div className="bg-card rounded-[24px] p-5 shadow-sm border border-border space-y-3">
         <h2 className="text-sm font-bold text-foreground">Tema de aparência</h2>
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => aplicarTema('claro')}
-            className={`h-11 rounded-2xl text-xs font-bold border flex items-center justify-center gap-1.5 transition-all ${
-              tema === 'claro'
-                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                : 'border-border text-foreground hover:bg-muted/30'
-            }`}
-          >
-            <Sun className="w-4 h-4" />
-            <span>Claro</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => aplicarTema('escuro')}
-            className={`h-11 rounded-2xl text-xs font-bold border flex items-center justify-center gap-1.5 transition-all ${
-              tema === 'escuro'
-                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                : 'border-border text-foreground hover:bg-muted/30'
-            }`}
-          >
-            <Moon className="w-4 h-4" />
-            <span>Escuro</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => aplicarTema('auto')}
-            className={`h-11 rounded-2xl text-xs font-bold border flex items-center justify-center gap-1.5 transition-all ${
-              tema === 'auto'
-                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                : 'border-border text-foreground hover:bg-muted/30'
-            }`}
-          >
-            <Laptop className="w-4 h-4" />
-            <span>Auto</span>
-          </button>
+        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tema de aparência">
+          {OPCOES_TEMA.map(({ valor, rotulo, Icone }) => (
+            <button
+              key={valor}
+              type="button"
+              role="radio"
+              aria-checked={tema === valor}
+              onClick={() => aplicarTema(valor)}
+              className={`h-11 rounded-2xl text-xs font-bold border flex items-center justify-center gap-1.5 transition-all ${
+                tema === valor
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                  : 'border-border text-foreground hover:bg-muted/30'
+              }`}
+            >
+              <Icone className="w-4 h-4" />
+              <span>{rotulo}</span>
+            </button>
+          ))}
         </div>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <strong>Noturno:</strong> tela bem escura com luz âmbar, para as mamadas de madrugada
+          sem ofuscar. <strong>Automático:</strong> liga o noturno sozinho das{' '}
+          {NOITE_INICIO_HORA}h às {NOITE_FIM_HORA}h e, de dia, segue o claro/escuro do celular. A
+          lua no topo da tela liga e desliga o noturno a qualquer hora.
+        </p>
       </div>
 
       {/* 3. TRANSPARÊNCIA E LGPD */}

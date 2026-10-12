@@ -15,11 +15,14 @@ import {
   Image as ImageIcon,
   FileText,
   ChevronRight,
+  Moon,
+  Sun,
 } from 'lucide-react'
 import { SyncIndicator } from './SyncIndicator'
 import { obterEspacoAtual, EspacoRecord } from '@/services/baby'
 import { formatarIdadeAmigavel } from '@/lib/regras/idade'
 import { useAuth } from '@/contexts/AuthContext'
+import { alternarNoturno, noturnoAtivo, ouvirTema } from '@/lib/tema'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 
@@ -30,6 +33,10 @@ export default function Layout() {
 
   const [espaco, setEspaco] = useState<EspacoRecord | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [noturno, setNoturno] = useState(() => noturnoAtivo())
+
+  // Acompanha trocas de tema feitas aqui ou em Ajustes
+  useEffect(() => ouvirTema(() => setNoturno(noturnoAtivo())), [])
 
   // Redirecionamento de rotas protegidas se não autenticado
   useEffect(() => {
@@ -94,6 +101,18 @@ export default function Layout() {
 
           <div className="flex items-center gap-2">
             <SyncIndicator />
+            <button
+              onClick={() => {
+                alternarNoturno()
+                setNoturno(noturnoAtivo())
+              }}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label={noturno ? 'Desligar modo noturno' : 'Ligar modo noturno'}
+              aria-pressed={noturno}
+              title={noturno ? 'Desligar modo noturno' : 'Modo noturno'}
+            >
+              {noturno ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <button
               onClick={() => navigate('/ajustes')}
               className="w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"

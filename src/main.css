@@ -23,6 +23,7 @@
     /* Fundo #f1f5f6 -> HSL: 192 18% 95% */
     --background: 43.6 40.7% 94.7%;
     /* Superfície branca */
+    --foreground: 192 33% 15%; /* #1a2e33 */
     --card: 0 0% 100%;
     --card-foreground: 192 33% 15%; /* #1a2e33 */
     --popover: 0 0% 100%;
@@ -69,7 +70,8 @@
     --popover: 191 22% 13%;
     --popover-foreground: 190 20% 93%;
 
-    --primary: 187 50% 45%;
+    /* Rosa da marca, mais claro para ler bem no fundo escuro */
+    --primary: 333 70% 64%;
     --primary-foreground: 190 30% 8%;
 
     --secondary: 191 20% 18%;
@@ -86,7 +88,55 @@
 
     --border: 191 20% 21%; /* #2a3a3e */
     --input: 191 20% 25%;
-    --ring: 187 50% 45%;
+    --ring: 333 70% 64%;
+  }
+
+  /* Modo noturno: quase preto com texto âmbar fraco, sem azul e sem branco forte,
+     para olhar o app de madrugada sem ofuscar nem despertar o bebê. */
+  .dark.noturno {
+    --background: 20 40% 3%;
+    --foreground: 30 55% 62%;
+
+    --card: 18 30% 7%;
+    --card-foreground: 30 55% 62%;
+    --popover: 18 30% 7%;
+    --popover-foreground: 30 55% 62%;
+
+    --primary: 14 65% 42%;
+    --primary-foreground: 25 40% 6%;
+
+    --secondary: 18 25% 11%;
+    --secondary-foreground: 30 55% 62%;
+
+    --muted: 18 25% 10%;
+    --muted-foreground: 25 30% 42%;
+
+    --accent: 18 25% 12%;
+    --accent-foreground: 30 55% 62%;
+
+    --destructive: 5 60% 42%;
+    --destructive-foreground: 25 40% 6%;
+
+    --warning: 30 70% 40%;
+    --success: 40 45% 38%;
+
+    --border: 18 25% 13%;
+    --input: 18 25% 16%;
+    --ring: 14 65% 42%;
+  }
+
+  /* No noturno, imagens e cores fixas (chips, alertas) também ficam mais apagadas. */
+  .noturno img,
+  .noturno video {
+    filter: brightness(0.6) sepia(0.4);
+  }
+  .noturno [class*='bg-amber-'],
+  .noturno [class*='bg-sky-'],
+  .noturno [class*='bg-emerald-'],
+  .noturno [class*='text-amber-'],
+  .noturno [class*='text-sky-'],
+  .noturno [class*='text-emerald-'] {
+    filter: brightness(0.75) saturate(0.7);
   }
 
   /* Desligar animações para usuários com preferência por movimento reduzido */
