@@ -18,6 +18,7 @@ import {
   Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import Notificacoes from '@/components/ajustes/Notificacoes'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -252,6 +253,9 @@ export default function Ajustes() {
           lua no topo da tela liga e desliga o noturno a qualquer hora.
         </p>
       </div>
+
+      {/* NOTIFICAÇÕES */}
+      {espaco && <Notificacoes espacoId={espaco.id} nomeBebe={espaco.nome || 'Sarah'} />}
 
       {/* 3. TRANSPARÊNCIA E LGPD */}
       <div className="bg-card rounded-[24px] p-5 shadow-sm border border-border space-y-3">

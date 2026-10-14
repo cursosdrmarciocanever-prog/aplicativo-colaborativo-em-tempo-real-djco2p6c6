@@ -38,4 +38,13 @@ docker compose logs pocketbase 2>&1 | grep '\[configuracao\]' | tail -1
 if docker compose logs pocketbase 2>&1 | grep '\[configuracao\]' | tail -1 | grep -q desligado; then
   echo "${AMARELO}Atenção: SMTP desligado. Sem ele os códigos de login não chegam (preencha SMTP_* no deploy/.env).${FIM}"
 fi
+for i in $(seq 1 20); do
+  docker compose logs notificador 2>&1 | grep -q 'pronto; ciclo' && break
+  sleep 2
+done
+if docker compose logs notificador 2>&1 | grep -q 'pronto; ciclo'; then
+  echo "[notificador] notificações ligadas"
+else
+  echo "${AMARELO}Atenção: o notificador ainda não respondeu (docker compose logs notificador).${FIM}"
+fi
 echo "${VERDE}Pronto! Diário no ar.${FIM}"

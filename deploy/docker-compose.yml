@@ -2,8 +2,10 @@
 #
 #   [Traefik :443] --> [web (nginx)] --SPA--> navegador
 #                                    \--proxy /api,/_--> [pocketbase :8090]
+#                                                              ^
+#   [notificador] --lê o estado do bebê / grava avisos---------/  --Web Push--> celulares
 #
-# Só o `web` fica exposto no Traefik; o PocketBase é interno.
+# Só o `web` fica exposto no Traefik; o PocketBase e o notificador são internos.
 # Variáveis: copie deploy/.env.example para deploy/.env e preencha.
 
 # Nome fixo do projeto: sem ele o Compose usa o nome da pasta ("deploy"), o mesmo do
@@ -21,8 +23,10 @@ services:
     restart: unless-stopped
     volumes:
       - pb_data:/pb/pb_data # dados (SQLite) e fotos — sobrevivem a rebuild
+      - push_chaves:/chaves # chaves das notificações, compartilhadas com o notificador
     environment:
       APP_URL: https://${DIARIO_HOST}
+      PUSH_DIR: /chaves
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -30,6 +34,22 @@ services:
       SMTP_TLS: ${SMTP_TLS:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Diário da Sarah}
+    networks:
+      - internal
+
+  notificador:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.notificador
+    restart: unless-stopped
+    depends_on:
+      - pocketbase
+    volumes:
+      - push_chaves:/chaves
+    environment:
+      PB_URL: http://pocketbase:8090
+      PUSH_DIR: /chaves
+      APP_URL: https://${DIARIO_HOST}
     networks:
       - internal
 
@@ -56,6 +76,7 @@ services:
 
 volumes:
   pb_data:
+  push_chaves:
 
 networks:
   internal:

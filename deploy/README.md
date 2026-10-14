@@ -91,3 +91,15 @@ docker compose cp pocketbase:/pb/pb_data ./pb_data_backup_$(date +%F)
   versão da Skip.
 - Problemas comuns: certificado com aviso = `CERT_RESOLVER` errado ou DNS ainda propagando;
   código não chega = confira a senha de app e o log (`docker compose logs pocketbase | grep -i smtp`).
+
+## Notificações no celular (Web Push)
+
+O serviço `notificador` (deploy/Dockerfile.notificador) sobe junto e não precisa de
+configuração: na primeira subida ele gera as chaves VAPID e o PocketBase cria o login
+interno dele, ambos guardados no volume `push_chaves`.
+
+- Conferir: `docker compose -p diario logs --tail 20 notificador` (deve mostrar `pronto; ciclo`).
+- Cada pessoa ativa em **Ajustes → Notificações neste celular**. No iPhone, só com o app
+  instalado na Tela de Início (iOS 16.4+).
+- Não apague o volume `push_chaves`: trocar as chaves invalida as inscrições e todos
+  precisariam ativar de novo.
