@@ -211,6 +211,30 @@ describe.skipIf(!temBinario || !temOpenssl)('notificações no celular (Web Push
     expect(celular.recebidos.filter((x) => x.corpo.title === 'Sarah: xixi')).toHaveLength(1)
   })
 
+  it('remédio na hora: aviso para quem ligou "remédios"', async () => {
+    const antes = celular.recebidos.length
+    // Horário de 1 minuto atrás, no fuso de Brasília
+    const p = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date(Date.now() - 60000))
+    const v = (t: string) => p.find((x) => x.type === t)!.value
+    await dona.cliente.collection('medicacoes').create({
+      espaco: espacoId,
+      nome: 'Vitamina D',
+      dose: '2 gotas',
+      tipo: 'fixo',
+      horarios: [`${v('hour')}:${v('minute')}`],
+      inicio: `${v('year')}-${v('month')}-${v('day')}`,
+      ativo: true,
+      criador: dona.id,
+    })
+    const r = await ate(() =>
+      celular.recebidos.slice(antes).find((x) => x.corpo.title === 'Sarah: hora do remédio'),
+    )
+    expect(r.corpo.body).toContain('Vitamina D, 2 gotas')
+  })
+
   it('aparelho que desinstalou (410) sai da lista sozinho', async () => {
     celular.respostas.set('/pai', 410)
     const doPai = (await outra.cliente.collection('push_inscricoes').getFullList())[0]

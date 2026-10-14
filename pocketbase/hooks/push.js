@@ -68,13 +68,14 @@ routerAdd('POST', '/backend/v1/push/inscrever', (c) => {
   rec.set('aparelho', texto(body.aparelho, 120))
   rec.set('falhas', 0)
   if (novo) {
-    // Padrão: mamada na hora e lembrete de atraso, vacinas e consultas; família desligado.
+    // Padrão: mamada na hora e lembrete de atraso, remédios, vacinas e consultas; família desligado.
     rec.set('mamada', true)
     rec.set('mamada_antes_min', 0)
     rec.set('mamada_atraso', true)
     rec.set('vacinas', true)
     rec.set('consultas', true)
     rec.set('familia', false)
+    rec.set('remedios', true)
     rec.set('teste_em', new Date().toISOString()) // o notificador manda "ativadas!"
   }
   $app.save(rec)
@@ -87,6 +88,7 @@ routerAdd('POST', '/backend/v1/push/inscrever', (c) => {
     vacinas: rec.getBool('vacinas'),
     consultas: rec.getBool('consultas'),
     familia: rec.getBool('familia'),
+    remedios: rec.getBool('remedios'),
   })
 })
 

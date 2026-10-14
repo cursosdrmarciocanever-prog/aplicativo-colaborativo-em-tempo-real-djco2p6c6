@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from '@/hooks/use-toast'
+import RemediosHoje from '@/components/remedios/RemediosHoje'
 import {
   obterEspacoAtual,
   obterMeuPapel,
@@ -626,6 +627,11 @@ export default function Hoje() {
             )
           }
         />
+      )}
+
+      {/* REMÉDIOS DE HOJE (só aparece se houver remédio cadastrado) */}
+      {espaco && (
+        <RemediosHoje espacoId={espaco.id} podeEscrever={podeRegistrar} esconderSeVazio />
       )}
 
       {/* 3. FRALDAS DO DIA COM METAS POR DIA DE VIDA */}

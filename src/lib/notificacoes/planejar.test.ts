@@ -12,6 +12,7 @@ const insc = (extra: Partial<Inscricao> = {}): Inscricao => ({
   vacinas: true,
   consultas: true,
   familia: false,
+  remedios: true,
   ...extra,
 })
 
@@ -141,5 +142,36 @@ describe('teste e registros da família', () => {
     expect(avisos.map((a) => a.inscricaoId)).toEqual(['b'])
     expect(avisos[0].titulo).toBe('Sarah: mamada (peito direito)')
     expect(avisos[0].corpo).toBe('Edineia registrou às 03:10.')
+  })
+})
+
+describe('remédios', () => {
+  const vitD = {
+    id: 'vd',
+    nome: 'Vitamina D',
+    dose: '2 gotas',
+    tipo: 'fixo' as const,
+    horarios: ['09:00'],
+    inicio: '2026-10-01',
+    ativo: true,
+  }
+  const b = (doses: EstadoBebe['dosesDeHoje'] = []) =>
+    bebe({ ultimaMamada: null, medicacoes: [vitD], dosesDeHoje: doses })
+
+  it('na hora da dose: aviso com nome e dose', () => {
+    expect(em('2026-10-14T11:59:00.000Z', b())).toHaveLength(0) // 08:59
+    const a = em('2026-10-14T12:00:30.000Z', b())
+    expect(a).toHaveLength(1)
+    expect(a[0].chave).toBe('remedio:vd:2026-10-14T09:00:i1')
+    expect(a[0].corpo).toContain('Vitamina D, 2 gotas (09:00)')
+  })
+
+  it('se alguém já deu, não avisa', () => {
+    const dada = [{ id: 'x', medicacao: 'vd', previsto: '2026-10-14T09:00', dada_em: '2026-10-14T11:58:00Z', status: 'dada' as const }]
+    expect(em('2026-10-14T12:01:00.000Z', b(dada))).toHaveLength(0)
+  })
+
+  it('preferência desligada não recebe', () => {
+    expect(em('2026-10-14T12:01:00.000Z', b(), [insc({ remedios: false })])).toHaveLength(0)
   })
 })

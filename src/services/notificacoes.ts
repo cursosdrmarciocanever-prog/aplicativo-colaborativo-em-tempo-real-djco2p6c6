@@ -16,12 +16,13 @@ export interface InscricaoPush extends RecordModel {
   vacinas: boolean
   consultas: boolean
   familia: boolean
+  remedios: boolean
   teste_em?: string
 }
 
 export type Preferencias = Pick<
   InscricaoPush,
-  'mamada' | 'mamada_antes_min' | 'mamada_atraso' | 'vacinas' | 'consultas' | 'familia'
+  'mamada' | 'mamada_antes_min' | 'mamada_atraso' | 'remedios' | 'vacinas' | 'consultas' | 'familia'
 >
 
 export type Suporte = 'ok' | 'sem-suporte' | 'ios-instalar' | 'negado'

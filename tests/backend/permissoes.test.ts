@@ -378,6 +378,78 @@ describe.skipIf(!temBinario)('permissões no PocketBase', () => {
     })
   })
 
+  describe('remédios (migração 0010)', () => {
+    let medId: string
+    const dose = (c: PocketBase, extra: Record<string, unknown> = {}) =>
+      c.collection('medicacao_doses').create({
+        espaco: espacoId,
+        medicacao: medId,
+        previsto: '2026-10-16T09:00',
+        dada_em: new Date().toISOString(),
+        status: 'dada',
+        criador: c.authStore.record!.id,
+        ...extra,
+      })
+
+    beforeAll(async () => {
+      const m = await dona.cliente.collection('medicacoes').create({
+        espaco: espacoId,
+        nome: 'Vitamina D',
+        dose: '2 gotas',
+        tipo: 'fixo',
+        horarios: ['09:00'],
+        inicio: '2026-10-16',
+        ativo: true,
+        criador: dona.id,
+      })
+      medId = m.id
+    })
+
+    it('família lê; estranho e viewer não escrevem', async () => {
+      const lida = await leitor.cliente.collection('medicacoes').getOne(medId)
+      expect(lida.horarios).toEqual(['09:00'])
+      expect(await estranho.cliente.collection('medicacoes').getFullList()).toHaveLength(0)
+      expect(await falha(dose(leitor.cliente))).toBe(400)
+      expect(await falha(dose(estranho.cliente))).toBe(400)
+    })
+
+    it('a mesma dose de horário fixo não é registrada duas vezes (mãe e pai)', async () => {
+      await dose(editor.cliente)
+      expect(await falha(dose(dona.cliente))).toBe(400)
+    })
+
+    it('doses "se necessário" (sem horário) podem se repetir', async () => {
+      await dose(dona.cliente, { previsto: '' })
+      await dose(dona.cliente, { previsto: '' })
+    })
+
+    it('dose não pode apontar para remédio de outro bebê', async () => {
+      const outro = await editor.cliente.collection('espacos').create({
+        nome: 'Outro',
+        criador: editor.id,
+        intervalo_mamada_minutos: 180,
+      })
+      const medOutro = await editor.cliente.collection('medicacoes').create({
+        espaco: outro.id,
+        nome: 'Ferro',
+        dose: '1 mL',
+        tipo: 'fixo',
+        horarios: ['10:00'],
+        inicio: '2026-10-16',
+        ativo: true,
+        criador: editor.id,
+      })
+      expect(await falha(dose(editor.cliente, { medicacao: medOutro.id, previsto: '2026-10-16T10:00' }))).toBe(400)
+    })
+  })
+
+  it('a mesma pessoa participa de mais de um bebê (índice único corrigido)', async () => {
+    const meus = await editor.cliente.collection('membros').getFullList({
+      filter: `usuario = "${editor.id}"`,
+    })
+    expect(meus.length).toBeGreaterThanOrEqual(2)
+  })
+
   describe('login', () => {
     it('login por senha está desativado (contas de demonstração inclusive)', async () => {
       const anon = new PocketBase(s.url)

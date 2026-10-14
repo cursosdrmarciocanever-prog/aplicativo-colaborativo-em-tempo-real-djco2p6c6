@@ -141,7 +141,7 @@ export default function Notificacoes({ espacoId, nomeBebe }: { espacoId: string;
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground leading-relaxed">
             Receba no celular, mesmo com o app fechado: hora da mamada da {nomeBebe}, mamada
-            atrasada, véspera das vacinas e das consultas.
+            atrasada, hora dos remédios, véspera das vacinas e das consultas.
           </p>
           <Button
             type="button"
@@ -192,6 +192,7 @@ export default function Notificacoes({ espacoId, nomeBebe }: { espacoId: string;
               )}
             </div>
             {linha('Mamada atrasada', 'Lembra 30 min depois do horário, se ninguém registrou.', 'mamada_atraso')}
+            {linha('Remédios e vitaminas', 'Na hora de cada dose, se ninguém marcou como dada.', 'remedios')}
             {linha('Vacinas', 'Na véspera e no dia, às 9h.', 'vacinas')}
             {linha('Consultas', 'Na véspera (9h) e na manhã do dia.', 'consultas')}
             {linha(

@@ -43,11 +43,13 @@ import AbaVacinas from '@/components/saude/AbaVacinas'
 import AbaCrescimento from '@/components/saude/AbaCrescimento'
 import AbaConsultas from '@/components/saude/AbaConsultas'
 import AbaDuvidas from '@/components/saude/AbaDuvidas'
+import AbaRemedios from '@/components/saude/AbaRemedios'
 
-type Aba = 'vacinas' | 'crescimento' | 'consultas' | 'duvidas'
+type Aba = 'vacinas' | 'remedios' | 'crescimento' | 'consultas' | 'duvidas'
 
 const ABAS: { id: Aba; rotulo: string; Icone: typeof Syringe }[] = [
   { id: 'vacinas', rotulo: 'Vacinas', Icone: Syringe },
+  { id: 'remedios', rotulo: 'Remédios', Icone: Pill },
   { id: 'crescimento', rotulo: 'Curvas', Icone: Ruler },
   { id: 'consultas', rotulo: 'Consultas', Icone: Stethoscope },
   { id: 'duvidas', rotulo: 'Dúvidas', Icone: MessageCircleQuestion },
@@ -259,7 +261,7 @@ export default function Saude() {
       </Button>
 
       {/* Abas */}
-      <div className="grid grid-cols-4 gap-1 bg-muted/50 p-1 rounded-2xl" role="tablist">
+      <div className="grid grid-cols-5 gap-1 bg-muted/50 p-1 rounded-2xl" role="tablist">
         {ABAS.map(({ id, rotulo, Icone }) => (
           <button
             key={id}
@@ -267,7 +269,7 @@ export default function Saude() {
             role="tab"
             aria-selected={aba === id}
             onClick={() => mudarAba(id)}
-            className={`h-11 rounded-xl text-[11px] font-bold flex flex-col items-center justify-center gap-0.5 ${
+            className={`h-11 rounded-xl text-[10px] font-bold flex flex-col items-center justify-center gap-0.5 ${
               aba === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
@@ -289,6 +291,15 @@ export default function Saude() {
           podeApagarTudo={papel === 'owner'}
           meuId={meuId}
           aoMudar={() => recarregar(espaco)}
+        />
+      )}
+      {espaco && aba === 'remedios' && (
+        <AbaRemedios
+          espacoId={espaco.id}
+          hoje={hoje}
+          podeEscrever={podeEscrever}
+          podeApagarTudo={papel === 'owner'}
+          meuId={meuId}
         />
       )}
       {aba === 'crescimento' && (
@@ -326,10 +337,9 @@ export default function Saude() {
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">
           Em breve
         </p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {[
             { t: 'Triagens neonatais', I: FileCheck2 },
-            { t: 'Medicações e vitaminas', I: Pill },
             { t: 'Exames', I: ClipboardList },
           ].map(({ t, I }) => (
             <div key={t} className="rounded-2xl border border-dashed border-border p-3 text-center">

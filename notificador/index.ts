@@ -151,7 +151,7 @@ async function ciclo() {
     } catch {
       continue
     }
-    const [ultimas, vacinas, consultas, novos] = await Promise.all([
+    const [ultimas, vacinas, consultas, novos, medicacoes, dosesDeHoje] = await Promise.all([
       pb.collection('eventos').getList(1, 1, {
         filter: pb.filter(
           "espaco = {:e} && deleted_at = '' && (tipo = 'mamada' || tipo = 'mamadeira')",
@@ -171,6 +171,16 @@ async function ciclo() {
             }),
           })
         : Promise.resolve([]),
+      doBebe.some((i) => i.remedios)
+        ? pb.collection('medicacoes').getFullList({
+            filter: pb.filter("espaco = {:e} && ativo = true && tipo = 'fixo'", { e: espacoId }),
+          })
+        : Promise.resolve([]),
+      doBebe.some((i) => i.remedios)
+        ? pb.collection('medicacao_doses').getFullList({
+            filter: pb.filter("espaco = {:e} && previsto ~ {:h}", { e: espacoId, h: `${hoje}T%` }),
+          })
+        : Promise.resolve([]),
     ])
 
     const avisos = planejarAvisos({
@@ -186,6 +196,8 @@ async function ciclo() {
         ultimaMamada: (ultimas.items[0] as never) || null,
         vacinasAplicadas: vacinas as never,
         proximasConsultas: consultas.map((c) => c.proxima_consulta as string),
+        medicacoes: medicacoes as never,
+        dosesDeHoje: dosesDeHoje as never,
       },
     })
     for (const ev of novos) {

@@ -3,9 +3,15 @@
 // Cada aviso tem uma chave única: o notificador grava a chave antes de enviar, então
 // reinícios e ciclos repetidos nunca mandam o mesmo aviso duas vezes.
 
-import { formatLocalTime, getLocalTodayDateString, getSaoPauloParts } from '../regras/fuso'
+import {
+  formatLocalTime,
+  getLocalTodayDateString,
+  getSaoPauloParts,
+  localDateTimeToUtcIso,
+} from '../regras/fuso'
 import { formatarDataBr } from '../regras/consulta'
 import { somarDias, statusDasDoses } from '../regras/vacinas'
+import { dosesDoDia, type DoseDada, type Medicacao } from '../regras/medicacoes'
 
 export interface Inscricao {
   id: string
@@ -17,6 +23,7 @@ export interface Inscricao {
   vacinas: boolean
   consultas: boolean
   familia: boolean
+  remedios?: boolean
   teste_em?: string
 }
 
@@ -38,6 +45,8 @@ export interface EstadoBebe {
   ultimaMamada?: UltimaMamada | null
   vacinasAplicadas: { id: string; dose_id: string; aplicada_em: string }[]
   proximasConsultas: string[] // AAAA-MM-DD
+  medicacoes?: Medicacao[]
+  dosesDeHoje?: DoseDada[]
 }
 
 export interface Aviso {
@@ -114,6 +123,30 @@ export function planejarAvisos(params: {
 
   const hoje = getLocalTodayDateString(agora)
   const amanha = somarDias(hoje, 1)
+
+  // ---- Remédios: na hora de cada dose ainda não registrada ----
+  if (bebe.medicacoes?.length) {
+    const pendentes = dosesDoDia({
+      medicacoes: bebe.medicacoes,
+      doses: bebe.dosesDeHoje || [],
+      agora,
+      dia: hoje,
+    }).filter((d) => d.situacao === 'agora' || d.situacao === 'atrasada')
+    for (const d of pendentes) {
+      const quando = new Date(localDateTimeToUtcIso(hoje, d.horario)).getTime()
+      if (!dentroDaJanela(t, quando)) continue
+      for (const i of inscricoes.filter((x) => x.remedios)) {
+        avisos.push({
+          chave: `remedio:${d.medicacao.id}:${d.previsto}:${i.id}`,
+          inscricaoId: i.id,
+          titulo: `${nome}: hora do remédio`,
+          corpo: `${d.medicacao.nome}, ${d.medicacao.dose} (${d.horario}). Depois de dar, marque no app para a família saber.`,
+          url: '/hoje',
+          tag: `remedio-${d.medicacao.id}`,
+        })
+      }
+    }
+  }
   const { hour } = getSaoPauloParts(agora)
 
   // ---- Vacinas: véspera e dia, a partir das 9h ----
